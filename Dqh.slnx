@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Dqh.Domain/Dqh.Domain.csproj" />
+    <Project Path="src/Dqh.Game/Dqh.Game.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dqh.Domain.Tests/Dqh.Domain.Tests.csproj" />
   </Folder>
 </Solution>
