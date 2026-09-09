@@ -14,18 +14,23 @@ internal static class GameLoop
 {
     public static void Run(GameWorld world, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
     {
-        presenter.Present(world.Map, world.Decorations, world.Npcs, player, clock.DeltaSeconds);
+        presenter.Present(world, player, clock.DeltaSeconds);
 
         while (!input.IsQuitRequested)
         {
             Update(world, player, input, clock.DeltaSeconds);
-            presenter.Present(world.Map, world.Decorations, world.Npcs, player, clock.DeltaSeconds);
+            presenter.Present(world, player, clock.DeltaSeconds);
         }
     }
 
     private static void Update(GameWorld world, PlayerMarker player, IInputSource input, float deltaSeconds)
     {
         player.Tick(deltaSeconds);
+        world.Tick(deltaSeconds, player);
+
+        // Movement is locked out for the duration of a map transition — the
+        // fade itself is the only thing that should be happening on screen.
+        if (world.IsTransitioning) return;
 
         if (input.TryGetMove(deltaSeconds, out var columnDelta, out var rowDelta))
         {

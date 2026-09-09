@@ -182,16 +182,38 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   map's own decorations/NPCs for free) and calls the pre-existing
   `PlayerMarker.WarpTo`. `Program.cs`/`GameLoop.Run` now pass a `GameWorld`
   instead of a fixed `TileMap`/decorations/NPCs triplet, so the active map can
-  change mid-loop; `IWorldPresenter`/the renderers are untouched; they still
-  just draw whatever `GameWorld` currently reports each frame. Verified
-  headless: walking onto the overworld's door (9,19) lands in the inn at
-  (5,8); walking onto the inn's door (5,9) lands back on the overworld at
-  (9,20). Caught and fixed a map-data bug along the way: `overworld.json`'s
-  portal targeted the inn's own door tile (5,9) instead of its floor tile one
+  change mid-loop; `IWorldPresenter`/the renderers just draw whatever
+  `GameWorld` currently reports each frame (`IWorldPresenter.Present` was
+  later simplified to take the whole `GameWorld` instead of its
+  `Map`/`Decorations`/`Npcs` spelled out separately — see the fade-transition
+  bullet below, which is what actually forced that). Verified headless:
+  walking onto the overworld's door (9,19) lands in the inn at (5,8); walking
+  onto the inn's door (5,9) lands back on the overworld at (9,20). Caught and
+  fixed a map-data bug along the way: `overworld.json`'s portal targeted the
+  inn's own door tile (5,9) instead of its floor tile one
   step off it (5,8) — the inn-to-overworld portal already had this right
   (targets (9,20), not its own door at (9,19)); left uncaught it wouldn't
   have looped, but would've dropped the player exactly on the threshold tile
   instead of just inside.
+- **Fade-to-black map transition**: `GameWorld` now owns the transition
+  itself, not just the swap — `CheckPortal` starts a fade instead of swapping
+  immediately, `GameWorld.Tick(deltaSeconds, player)` ramps `TransitionFade`
+  0→1 over `TransitionSettings.FadeSeconds`, performs the actual
+  `MapLoader.Load`/`PlayerMarker.WarpTo` at the midpoint (full black), then
+  ramps 1→0 on the new map. `GameLoop.Update` calls `world.Tick` every frame
+  and skips reading movement input entirely while `world.IsTransitioning` —
+  input during the fade is simply not registered (real-time) / stays queued
+  untouched (headless), not lost. Forced `IWorldPresenter.Present` to take
+  the whole `GameWorld` instead of `Map`/`Decorations`/`Npcs` spelled out
+  separately, since a fourth per-frame value (the fade amount) made the
+  parameter list the wrong shape to keep extending; `RaylibWorldPresenter`
+  draws a black `Raylib.DrawRectangle` over the whole screen at
+  `TransitionFade` alpha after everything else. `ConsoleWorldPresenter`
+  accepts the same `GameWorld` but doesn't render the fade — headless output
+  is otherwise identical, just delayed by the transition's duration (verified
+  by counting ticks in the ASCII dump: player position holds at the old tile
+  for the fade-out half, jumps to the new tile at the midpoint, holds again
+  through fade-in, then resumes moving on the next real input).
 - **Not yet wired**: bump-to-talk NPC interaction (dialogue, the innkeeper
   actually healing a `Party`, the dock worker's line) — designed in an
   earlier plan-mode session, predates the asset-first pivot. NPCs render,
@@ -371,3 +393,24 @@ which already correctly targets the overworld's floor at (9,20) rather than
 its own door at (9,19). Verified both directions headless: walking onto
 (9,19) lands in the inn at (5,8); walking onto the inn's (5,9) lands back at
 (9,20).
+
+### 2026-09-09 — Session 7
+
+Added the fade-to-black transition across a map change (the instant jump-cut
+from session 6 "works but we maybe need some animation for when entering and
+leaving"). `GameWorld` now drives the fade itself — `CheckPortal` starts it
+instead of swapping immediately, `Tick(deltaSeconds, player)` ramps
+`TransitionFade` 0→1→0 over two `TransitionSettings.FadeSeconds` halves,
+performing the actual map swap/warp at the midpoint (full black), and
+`GameLoop.Update` skips movement input entirely while `world.IsTransitioning`
+so nothing moves during the fade. This forced `IWorldPresenter.Present` to
+change shape — `Map`/`Decorations`/`Npcs` spelled out as three separate
+parameters plus a fourth for the fade amount was the wrong direction to keep
+extending, so it now just takes the whole `GameWorld`; `RaylibWorldPresenter`
+draws a full-screen black rectangle at `TransitionFade` alpha,
+`ConsoleWorldPresenter` ignores the fade (headless stays visually
+unaffected, same precedent as the camera) but still experiences the same
+input lockout, verified by counting ticks in the ASCII dump: player position
+holds at the old tile through fade-out, jumps to the new tile at the
+midpoint, holds again through fade-in, then moves again on the next real
+input.

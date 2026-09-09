@@ -7,24 +7,24 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 {
     private const char PlayerSymbol = '@';
 
-    public void Present(TileMap map, IReadOnlyList<DecorationData> decorations, IReadOnlyList<NpcData> npcs, PlayerMarker player, float deltaSeconds)
+    public void Present(GameWorld world, PlayerMarker player, float deltaSeconds)
     {
-        var occupantSymbols = decorations.ToDictionary(d => (d.Column, d.Row), d => SymbolFor(d.Id));
-        foreach (var npc in npcs)
+        var occupantSymbols = world.Decorations.ToDictionary(d => (d.Column, d.Row), d => SymbolFor(d.Id));
+        foreach (var npc in world.Npcs)
         {
             occupantSymbols[(npc.Column, npc.Row)] = SymbolFor(npc.Id);
         }
 
-        for (var row = 0; row < map.Rows; row++)
+        for (var row = 0; row < world.Map.Rows; row++)
         {
-            var line = new char[map.Columns];
-            for (var col = 0; col < map.Columns; col++)
+            var line = new char[world.Map.Columns];
+            for (var col = 0; col < world.Map.Columns; col++)
             {
                 line[col] = col == player.Column && row == player.Row
                     ? PlayerSymbol
                     : occupantSymbols.TryGetValue((col, row), out var occupantSymbol)
                         ? occupantSymbol
-                        : SymbolFor(map.GetTile(col, row));
+                        : SymbolFor(world.Map.GetTile(col, row));
             }
 
             Console.WriteLine(new string(line));

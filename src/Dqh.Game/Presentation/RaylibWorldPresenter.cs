@@ -21,17 +21,24 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         _npcRenderer = npcRenderer;
     }
 
-    public void Present(TileMap map, IReadOnlyList<DecorationData> decorations, IReadOnlyList<NpcData> npcs, PlayerMarker player, float deltaSeconds)
+    public void Present(GameWorld world, PlayerMarker player, float deltaSeconds)
     {
-        var camera = Camera.Follow(map, player.Column, player.Row, GridSettings.CameraColumns, GridSettings.CameraRows);
+        var camera = Camera.Follow(world.Map, player.Column, player.Row, GridSettings.CameraColumns, GridSettings.CameraRows);
         var viewport = Viewport.Fit(camera.VisibleColumns, camera.VisibleRows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
 
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Palette.WindowBackground);
-        _tileRenderer.Draw(map, camera, viewport);
-        _propRenderer.Draw(decorations, camera, viewport);
-        _npcRenderer.Draw(npcs, camera, viewport);
+        _tileRenderer.Draw(world.Map, camera, viewport);
+        _propRenderer.Draw(world.Decorations, camera, viewport);
+        _npcRenderer.Draw(world.Npcs, camera, viewport);
         _playerRenderer.Draw(player.Column, player.Row, player.Facing, player.WalkFrame, camera, viewport);
+
+        if (world.TransitionFade > 0f)
+        {
+            var alpha = (byte)Math.Clamp(world.TransitionFade * 255f, 0f, 255f);
+            Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), new Color((byte)0, (byte)0, (byte)0, alpha));
+        }
+
         Raylib.EndDrawing();
     }
 }
