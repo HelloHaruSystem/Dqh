@@ -40,7 +40,13 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 
         Console.WriteLine($"Player at ({player.Column}, {player.Row})");
 
-        if (world.ActiveDialogueLine is { } activeLine)
+        if (world.ActiveChoice is { } choice)
+        {
+            Console.WriteLine($"? {choice.Prompt}");
+            Console.WriteLine($"{(world.ChoiceYesSelected ? "> " : "  ")}{choice.YesLabel}");
+            Console.WriteLine($"{(!world.ChoiceYesSelected ? "> " : "  ")}{choice.NoLabel}");
+        }
+        else if (world.ActiveDialogueLine is { } activeLine)
         {
             Console.WriteLine($"> {activeLine} [e to continue]");
         }

@@ -45,12 +45,27 @@ internal static class GameLoop
 
         if (world.IsTalking)
         {
-            if (confirmPressed) world.AdvanceDialogue();
+            // Only one of TryGetConfirm/TryGetMove reads fresh input per tick.
+            if (world.ActiveChoice is not null)
+            {
+                if (confirmPressed)
+                {
+                    world.CommitChoice();
+                }
+                else if (input.TryGetMove(deltaSeconds, out _, out var talkingRowDelta) && talkingRowDelta != 0)
+                {
+                    world.ToggleChoiceSelection();
+                }
+            }
+            else if (confirmPressed)
+            {
+                world.AdvanceDialogue();
+            }
+            else
+            {
+                input.TryGetMove(deltaSeconds, out _, out _);
+            }
 
-            // Drain (ignore) any queued movement while a line is on screen —
-            // otherwise it sits ahead of the next confirm in a scripted/
-            // headless input queue and blocks it forever.
-            input.TryGetMove(deltaSeconds, out _, out _);
             return;
         }
 

@@ -39,7 +39,11 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
             Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), new Color((byte)0, (byte)0, (byte)0, alpha));
         }
 
-        if (world.ActiveDialogueLine is { } line)
+        if (world.ActiveChoice is { } choice)
+        {
+            DrawChoiceBox(choice, world.ChoiceYesSelected);
+        }
+        else if (world.ActiveDialogueLine is { } line)
         {
             DrawDialogueBox(line);
         }
@@ -73,6 +77,37 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
             boxY + boxHeight - margin - UiSettings.ContinueHintFontSize,
             UiSettings.ContinueHintFontSize,
             Palette.DialogueContinueHintText);
+    }
+
+    private static void DrawChoiceBox(DialogueChoice choice, bool yesSelected)
+    {
+        var margin = UiSettings.DialogueBoxMarginPixels;
+        var screenWidth = Raylib.GetScreenWidth();
+        var screenHeight = Raylib.GetScreenHeight();
+        var boxHeight = screenHeight / UiSettings.DialogueBoxHeightDivisor;
+        var boxY = screenHeight - boxHeight - margin;
+        var lineHeight = UiSettings.DialogueLineFontSize + margin / 2;
+
+        Raylib.DrawRectangle(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBackground);
+        Raylib.DrawRectangleLines(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBorder);
+        Raylib.DrawText(choice.Prompt, margin * 2, boxY + margin, UiSettings.DialogueLineFontSize, Palette.DialogueLineText);
+
+        var optionsY = boxY + margin + lineHeight;
+        DrawChoiceOption(choice.YesLabel, margin * 2, optionsY, yesSelected);
+        DrawChoiceOption(choice.NoLabel, margin * 2, optionsY + lineHeight, !yesSelected);
+
+        Raylib.DrawText(
+            "[Up/Down] select   [Enter/Space/E] confirm",
+            margin * 2,
+            boxY + boxHeight - margin - UiSettings.ContinueHintFontSize,
+            UiSettings.ContinueHintFontSize,
+            Palette.DialogueContinueHintText);
+    }
+
+    private static void DrawChoiceOption(string label, int x, int y, bool selected)
+    {
+        var text = (selected ? "> " : "  ") + label;
+        Raylib.DrawText(text, x, y, UiSettings.DialogueLineFontSize, selected ? Palette.DialogueLineText : Palette.DialogueContinueHintText);
     }
 
     private static void DrawInteractPrompt()

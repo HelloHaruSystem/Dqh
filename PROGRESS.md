@@ -255,9 +255,44 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   until then. `RaylibWorldPresenter` draws it as a full-screen opaque
   overlay ("Welcome to DQH" / "Press Enter to begin"); `ConsoleWorldPresenter`
   prints the equivalent and skips the map dump entirely while it's showing.
-- **Not yet wired**: the innkeeper actually healing a `Party`
-  (`Adventurer.FullyRestore()` already exists for this) — dialogue itself
-  now works for both NPCs.
+- **Yes/no dialogue choices; innkeeper stay-the-night flow.** `DialogueStep`
+  (`World/DialogueStep.cs`) is either a `DialogueLine` or a `DialogueChoice`
+  (prompt + yes/no labels + `Action` callbacks); `GameWorld`'s dialogue queue
+  holds a mix of both. `IInteractable.Interact` changed from returning plain
+  lines to `void Interact(GameWorld world, PlayerMarker player)` — an
+  interactable now drives the world directly (queue lines, queue a choice,
+  or both), rather than `GameWorld` just reading static text off it.
+  `NpcData.Interact` delegates to a new `NpcBehaviors.Interact(npc, world,
+  player)`, which dispatches by id: NPCs with nothing but canned lines still
+  go through `NpcDialogue`, but `"innkeeper"` gets real code (`NpcBehaviors`)
+  that asks "stay the night?" and, on yes, calls the map-generalized
+  `GameWorld.StartRelocation` (below) to move the player beside the inn's
+  first bed; on no, queues a decline line instead. `GameWorld.Tick`'s
+  transition logic was generalized from "always reloads a target map" to
+  an internal `PendingTransition(TargetMap?, TargetColumn, TargetRow)` — a
+  portal crossing sets `TargetMap`, a same-map relocation leaves it null, and
+  both play the identical fade. Up/down while a choice is shown flips
+  `ChoiceYesSelected`; confirm commits it. `RaylibWorldPresenter`/
+  `ConsoleWorldPresenter` both got the equivalent choice UI.
+
+  Caught (again) by actually running a headless script, not by reading the
+  code: after adding the choice, `GameLoop`'s talking branch called *both*
+  `TryGetConfirm()` and `TryGetMove()` every tick unconditionally, in the
+  name of never leaving a stray queued move stuck ahead of a confirm
+  (session 8's fix). But each headless script line is one tick's worth of
+  input — when confirm's call already consumed a tick's real token, the
+  second, "just in case" `TryGetMove` call still triggered a fresh blocking
+  read of the *next* line, occasionally pulling in a trailing `q` a tick
+  early and quitting before an in-flight relocation had finished (so it
+  looked like the innkeeper's "yes" silently did nothing, when actually the
+  transition just never got the ticks to complete). Fixed by making the two
+  calls mutually exclusive per tick — `TryGetMove` is only ever reached when
+  `confirmPressed` was false that tick, whether that's to read an up/down
+  toggle or, when there's no choice to toggle, to drain a stray move.
+- **Not yet wired**: the innkeeper actually healing a `Party` — there's no
+  `Party` instance running in `Dqh.Game` yet at all (it stays purely a
+  `Dqh.Domain` concept until battle/party wiring lands), so "yes" currently
+  just relocates the player with no mechanical effect.
 
 ## Designed but not yet built
 
@@ -521,3 +556,22 @@ dialogue), a second `e` opens the dialogue, a third dismisses it back to the
 prompt (still facing them) — and `q` during the welcome screen quits cleanly
 instead of hanging, since the outer loop's quit check doesn't depend on
 `GameWorld` state at all.
+
+### 2026-09-09 — Session 10
+
+Added yes/no dialogue choices and the innkeeper's stay-the-night flow — see
+"What's actually built" above for the final shape (`DialogueStep`,
+`IInteractable.Interact` now driving `GameWorld` directly, `NpcBehaviors`,
+`GameWorld.StartRelocation` generalizing the portal transition to same-map
+moves). Caught the same class of bug as session 8 one layer up: calling both
+`TryGetConfirm`/`TryGetMove` unconditionally per tick could over-read a
+headless script by one line, quitting before an in-flight relocation
+finished — fixed by making the two mutually exclusive per tick. Verified
+both the "yes" (relocates beside the bed) and "no" (decline line, no
+relocation) paths headless, each quitting cleanly.
+
+Flagged for a later session, not done now: the user asked for a look at
+whether the accumulated `Dqh.Game` changes (animation, NPCs, portals,
+transitions, dialogue, choices, welcome screen — sessions 4 through 10) are
+still well-structured, given how much has landed without a dedicated pass to
+step back and check. That review is still pending.

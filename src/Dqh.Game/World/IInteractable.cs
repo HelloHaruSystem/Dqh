@@ -6,6 +6,6 @@ internal interface IInteractable
     int Column { get; }
     int Row { get; }
 
-    /// <returns>The lines of text to show for this interaction.</returns>
-    IReadOnlyList<string> Interact();
+    /// <summary>Queues whatever this interaction shows — lines, a choice, or both — onto <paramref name="world"/>.</summary>
+    void Interact(GameWorld world, PlayerMarker player);
 }

@@ -22,7 +22,7 @@ internal sealed class NpcData : IInteractable
     public int Column { get; set; }
     public int Row { get; set; }
 
-    public IReadOnlyList<string> Interact() => NpcDialogue.LinesFor(Id);
+    public void Interact(GameWorld world, PlayerMarker player) => NpcBehaviors.Interact(this, world, player);
 }
 
 internal sealed class PortalData
