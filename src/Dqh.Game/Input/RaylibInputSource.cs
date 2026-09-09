@@ -1,3 +1,4 @@
+using Dqh.Game.Settings;
 using Raylib_cs;
 
 namespace Dqh.Game.Input;
@@ -9,8 +10,6 @@ namespace Dqh.Game.Input;
 /// </summary>
 internal sealed class RaylibInputSource : IInputSource
 {
-    private const float MoveRepeatIntervalSeconds = 0.15f;
-
     private float _timeSinceLastMove;
 
     public bool IsQuitRequested => Raylib.WindowShouldClose();
@@ -30,7 +29,7 @@ internal sealed class RaylibInputSource : IInputSource
         }
 
         _timeSinceLastMove += deltaSeconds;
-        if (_timeSinceLastMove < MoveRepeatIntervalSeconds) return false;
+        if (_timeSinceLastMove < MovementSettings.StepIntervalSeconds) return false;
 
         _timeSinceLastMove = 0f;
         return true;
