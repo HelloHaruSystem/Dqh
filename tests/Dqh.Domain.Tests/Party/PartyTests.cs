@@ -12,6 +12,18 @@ public class PartyTests
     private static readonly List<Encounter> ResolvedByNamedMethod = [];
 
     [Fact]
+    public void Members_ReflectsRegisteredAdventurers()
+    {
+        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var hero = new Hero("Test Hero");
+        var priest = new Priest("Test Priest");
+        party.Register(hero);
+        party.Register(priest);
+
+        Assert.Equal([hero, priest], party.Members);
+    }
+
+    [Fact]
     public void Register_SameAdventurerTwice_ThrowsAdventurerAlreadyRegisteredException()
     {
         var party = new Domain.Party.Party(new RandomTargetStrategy());

@@ -6,6 +6,8 @@ namespace Dqh.Domain.Party;
 
 public interface IParty
 {
+    IReadOnlyList<Adventurer> Members { get; }
+
     void Register(Adventurer adventurer);
 
     void Report(Encounter encounter);
