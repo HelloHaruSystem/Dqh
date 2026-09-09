@@ -4,11 +4,11 @@ Running record of work across sessions, kept in the repo so any session can pick
 context without relying on chat history. See [`docs/domain-model.md`](docs/domain-model.md)
 for the design; this file tracks *build status* against that design.
 
-**⚠ `docs/domain-model.drawio`/`.md` are stale relative to the code below** — the
-combat core evolved significantly during implementation (see "Design changes since
-the UML" below). Refresh both at the start of the next session, before adding
-`Encounter`/`Party` (kernekrav g requires the diagram to match the final code, and
-it's much cheaper to keep it current incrementally than to reconstruct it later).
+The UML lives as a Mermaid diagram embedded in `docs/domain-model.md` (switched from
+an earlier hand-placed draw.io XML file, since Mermaid's automatic layout produced a
+much cleaner result — see the session log). It was refreshed at the end of session 1
+to match the combat core as actually built. Keep this discipline: refresh the
+diagram whenever the domain design changes, not just once at the end.
 
 ## Kernekrav checklist (DQH names)
 
@@ -20,7 +20,7 @@ it's much cheaper to keep it current incrementally than to reconstruct it later)
 | d) generic search method | `DomainToolbox.FindFirst<T>` | Not started |
 | e) ≥2 custom exceptions | `AdventurerUnavailableException`, `NoSuitableAdventurerFoundException`, `InsufficientManaException` | Not started (see note below) |
 | f) callback on resolution | `Party.ResolveEncounter(Encounter, Action<Encounter>)` | Not started |
-| g) UML before coding | `docs/domain-model.drawio` / `.md` | Done, but **stale** — refresh next session |
+| g) UML before coding | `docs/domain-model.md` (Mermaid) | **Done** — matches current code |
 | h) dependency inversion via injected strategy | `IChampionSelectionStrategy` → `Party` ctor | Not started |
 | i) documentation & git history | README, XML docs, incremental commits | In progress (XML docs done for everything built so far; README still missing) |
 
@@ -51,8 +51,14 @@ it's much cheaper to keep it current incrementally than to reconstruct it later)
 - 13 xUnit tests in `tests/Dqh.Domain.Tests` covering mana clamping, signature-move
   polymorphism, HP clamping/defeat, elemental weakness bonus damage, and `IAttacker`
   crossing the Adventurer/Monster split. All passing.
+- `Combatants/` reorganized into subfolders once it grew past ~10 files: shared
+  contract (`ICombatant`, `HitPointTrack`) stays at `Combatants/` root,
+  `Combatants/Adventurers/` holds the hero hierarchy, `Combatants/Monsters/` holds
+  the monster system — namespaces match folders (`Dqh.Domain.Combatants.Adventurers`
+  / `.Monsters`).
+- `docs/domain-model.md` refreshed to match all of the above.
 
-## Design changes since the original UML (why the diagram needs a refresh)
+## Design changes since the first UML pass (now reflected in the diagram)
 
 - No `Monster` abstract class / no `Slime`/`Goblin`/`Dragon` subclasses — replaced by
   the single data-driven `Monster` class above. Decided against a shared
@@ -96,8 +102,8 @@ Done:
   (Heltevagten's Hero/Incident/DispatchCenter → Adventurer/Encounter/Party).
 - Chose raylib-cs for rendering (confirmed working on this machine: window opens,
   X11/GLFW/OpenGL init succeeds).
-- Produced the first-pass `docs/domain-model.drawio`/`.md` UML before coding
-  (kernekrav g) — now stale, see above.
+- Produced the first-pass UML before coding (kernekrav g), initially as a
+  hand-placed draw.io XML file.
 - Scaffolded `src/Dqh.Game` (raylib-cs console app) and `tests/Dqh.Domain.Tests`
   (xUnit), wired into `Dqh.slnx`.
 - Built a raylib overworld proof-of-concept in `Dqh.Game`: `World/` (`TileMap`,
@@ -114,13 +120,25 @@ Done:
   now in the repo.
 - Added 13 passing xUnit tests exercising the new domain code.
 
+- Reorganized `Combatants/` into `Adventurers/`/`Monsters/` subfolders (namespaces
+  matching folders) once the flat folder grew past ~10 files mixing three
+  sub-concerns.
+- Refreshed the UML to match the fully implemented combat core (still the
+  speculative first pass before this) — as a draw.io XML file first, but its
+  hand-placed coordinates produced edges cutting through boxes with no way to
+  preview the result. Switched to Mermaid instead: real automatic layout (dagre),
+  renders natively in the diagramming Artifact, on GitHub, and in most editors.
+  Deleted `docs/domain-model.drawio`; `docs/domain-model.md`'s Mermaid diagram is
+  now the sole UML deliverable. Also trimmed the surrounding prose in that file
+  down to short bullets per request.
+
 Next session:
-1. Refresh `docs/domain-model.drawio`/`.md` to match the code (see "Design changes"
-   above) — do this first, before adding more domain code, per kernekrav g.
-2. `Encounter`, `IParty`/`Party` (roster as `List<Adventurer>` aggregation, encounter
+1. `Encounter`, `IParty`/`Party` (roster as `List<Adventurer>` aggregation, encounter
    log as `List<Encounter>` composition), `IChampionSelectionStrategy` +
    `FirstAvailableChampionStrategy` injected via `Party`'s constructor (kernekrav h).
-3. `DomainToolbox.FindFirst<T>`, the two/three exceptions (including finally wiring
+2. `DomainToolbox.FindFirst<T>`, the two/three exceptions (including finally wiring
    `InsufficientManaException` into `Adventurer.SpendMana`), the resolution callback.
-4. Only after that: items, `IEncounterGenerator`/`IBattleResolver`, wiring encounters
+3. Only after that: items, `IEncounterGenerator`/`IBattleResolver`, wiring encounters
    into the `Dqh.Game` raylib loop, README, and the Day-2 alternative-track choice.
+4. Keep `docs/domain-model.md` updated as each of the above lands, rather than
+   batching the refresh at the end again.
