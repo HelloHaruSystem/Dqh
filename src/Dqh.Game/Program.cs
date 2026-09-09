@@ -3,6 +3,7 @@ using Dqh.Game.Input;
 using Dqh.Game.Presentation;
 using Dqh.Game.Rendering;
 using Dqh.Game.Settings;
+using Dqh.Game.Timing;
 using Dqh.Game.World;
 using Raylib_cs;
 
@@ -20,8 +21,9 @@ if (headless)
 {
     IInputSource input = new ConsoleInputSource();
     IWorldPresenter presenter = new ConsoleWorldPresenter();
+    IClock clock = new HeadlessClock();
 
-    GameLoop.Run(map, player, input, presenter);
+    GameLoop.Run(map, player, input, presenter, clock);
 }
 else
 {
@@ -32,8 +34,9 @@ else
 
     IInputSource input = new RaylibInputSource();
     IWorldPresenter presenter = new RaylibWorldPresenter(new CheckerboardTileRenderer(), new RectangleActorRenderer(Palette.Player));
+    IClock clock = new RaylibClock();
 
-    GameLoop.Run(map, player, input, presenter);
+    GameLoop.Run(map, player, input, presenter, clock);
 
     Raylib.CloseWindow();
 }
