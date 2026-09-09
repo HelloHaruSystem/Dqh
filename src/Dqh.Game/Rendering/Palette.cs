@@ -6,4 +6,9 @@ namespace Dqh.Game.Rendering;
 internal static class Palette
 {
     public static readonly Color WindowBackground = Color.Black;
+
+    public static readonly Color DialogueBoxBackground = new((byte)10, (byte)10, (byte)40, (byte)230);
+    public static readonly Color DialogueBoxBorder = Color.White;
+    public static readonly Color DialogueLineText = Color.White;
+    public static readonly Color DialogueContinueHintText = Color.LightGray;
 }

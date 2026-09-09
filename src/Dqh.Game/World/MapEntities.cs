@@ -16,11 +16,13 @@ internal sealed class GridPosition
 }
 
 /// <summary><see cref="Id"/> resolves to actual dialogue/behavior in code, not here.</summary>
-internal sealed class NpcData
+internal sealed class NpcData : IInteractable
 {
     public string Id { get; set; } = "";
     public int Column { get; set; }
     public int Row { get; set; }
+
+    public IReadOnlyList<string> Interact() => NpcDialogue.LinesFor(Id);
 }
 
 internal sealed class PortalData

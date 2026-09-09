@@ -32,10 +32,31 @@ internal static class GameLoop
         // fade itself is the only thing that should be happening on screen.
         if (world.IsTransitioning) return;
 
+        // Polled every tick regardless of whether anyone's talking, so a
+        // confirm press can never sit queued up and block later input — it's
+        // simply a no-op when there's no dialogue to advance.
+        if (input.TryGetConfirm())
+        {
+            world.AdvanceDialogue();
+        }
+
+        if (world.IsTalking)
+        {
+            // Drain (ignore) any queued movement while a line is on screen —
+            // otherwise it sits ahead of the next confirm in a scripted/
+            // headless input queue and blocks it forever.
+            input.TryGetMove(deltaSeconds, out _, out _);
+            return;
+        }
+
         if (input.TryGetMove(deltaSeconds, out var columnDelta, out var rowDelta))
         {
+            var targetColumn = player.Column + columnDelta;
+            var targetRow = player.Row + rowDelta;
+
             player.Move(columnDelta, rowDelta);
             world.CheckPortal(player);
+            world.TrySpeakTo(targetColumn, targetRow);
         }
     }
 }

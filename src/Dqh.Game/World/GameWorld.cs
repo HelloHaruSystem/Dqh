@@ -12,6 +12,7 @@ internal sealed class GameWorld
     private PortalData? _pendingPortal;
     private float _transitionElapsed;
     private bool _hasSwapped;
+    private readonly Queue<string> _dialogueLines = new();
 
     public TileMap Map => _current.Map;
     public IReadOnlyList<DecorationData> Decorations => _current.Entities.Decorations;
@@ -22,6 +23,11 @@ internal sealed class GameWorld
     public float TransitionFade { get; private set; }
 
     public bool IsTransitioning => _pendingPortal is not null;
+
+    /// <summary>The line currently on screen, or null when nobody is being spoken to.</summary>
+    public string? ActiveDialogueLine => _dialogueLines.Count > 0 ? _dialogueLines.Peek() : null;
+
+    public bool IsTalking => _dialogueLines.Count > 0;
 
     public GameWorld(string startingMapName)
     {
@@ -66,5 +72,25 @@ internal sealed class GameWorld
         TransitionFade = _transitionElapsed < half
             ? _transitionElapsed / half
             : 1f - (_transitionElapsed - half) / half;
+    }
+
+    /// <summary>If the given tile is an NPC's, queues that NPC's dialogue. Pass the tile the player attempted to step onto — computed before the move, since a bump never actually relocates the player.</summary>
+    public void TrySpeakTo(int targetColumn, int targetRow)
+    {
+        if (IsTransitioning || IsTalking) return;
+
+        var npc = _current.Entities.Npcs.FirstOrDefault(n => n.Column == targetColumn && n.Row == targetRow);
+        if (npc is null) return;
+
+        foreach (var line in NpcDialogue.LinesFor(npc.Id))
+        {
+            _dialogueLines.Enqueue(line);
+        }
+    }
+
+    /// <summary>Dismisses the current line, revealing the next one if there is one. A no-op when nobody is talking.</summary>
+    public void AdvanceDialogue()
+    {
+        if (_dialogueLines.Count > 0) _dialogueLines.Dequeue();
     }
 }

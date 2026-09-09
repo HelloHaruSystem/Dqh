@@ -39,6 +39,30 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
             Raylib.DrawRectangle(0, 0, Raylib.GetScreenWidth(), Raylib.GetScreenHeight(), new Color((byte)0, (byte)0, (byte)0, alpha));
         }
 
+        if (world.ActiveDialogueLine is { } line)
+        {
+            DrawDialogueBox(line);
+        }
+
         Raylib.EndDrawing();
+    }
+
+    private static void DrawDialogueBox(string line)
+    {
+        var margin = DialogueSettings.BoxMarginPixels;
+        var screenWidth = Raylib.GetScreenWidth();
+        var screenHeight = Raylib.GetScreenHeight();
+        var boxHeight = screenHeight / DialogueSettings.BoxHeightDivisor;
+        var boxY = screenHeight - boxHeight - margin;
+
+        Raylib.DrawRectangle(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBackground);
+        Raylib.DrawRectangleLines(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBorder);
+        Raylib.DrawText(line, margin * 2, boxY + margin, DialogueSettings.LineFontSize, Palette.DialogueLineText);
+        Raylib.DrawText(
+            "[Enter/Space/E] continue",
+            margin * 2,
+            boxY + boxHeight - margin - DialogueSettings.ContinueHintFontSize,
+            DialogueSettings.ContinueHintFontSize,
+            Palette.DialogueContinueHintText);
     }
 }

@@ -214,11 +214,40 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   by counting ticks in the ASCII dump: player position holds at the old tile
   for the fade-out half, jumps to the new tile at the midpoint, holds again
   through fade-in, then resumes moving on the next real input).
-- **Not yet wired**: bump-to-talk NPC interaction (dialogue, the innkeeper
-  actually healing a `Party`, the dock worker's line) — designed in an
-  earlier plan-mode session, predates the asset-first pivot. NPCs render,
-  block movement, and portals move the player between maps; nothing happens
-  yet when the player bumps into an NPC specifically.
+- **Bump-to-talk NPC dialogue**: `NpcDialogue` (static, keyed by NPC id — the
+  behavior the existing `NpcData.Id` doc comment always said belonged in
+  code, not the map JSON) holds each NPC's lines. `GameWorld` gained a
+  `Queue<string>` of dialogue lines — `TrySpeakTo(targetColumn, targetRow)`
+  enqueues an NPC's lines when that tile is bumped, `ActiveDialogueLine`
+  peeks the front, `AdvanceDialogue()` dequeues it. `GameLoop.Update` now
+  computes the attempted destination *before* calling `player.Move`, so
+  `TrySpeakTo` checks the tile actually being bumped rather than one
+  computed off wherever the player ended up; polls a new
+  `IInputSource.TryGetConfirm()` every tick (Enter/Space/E in
+  `RaylibInputSource`) to advance/dismiss a line, and locks out movement
+  entirely while `world.IsTalking`. `RaylibWorldPresenter` draws the line in
+  a bottom-screen box (`DialogueSettings`/new `Palette` entries);
+  `ConsoleWorldPresenter` prints it as an extra line for headless parity.
+  `Input/MoveScript.cs` became `Input/InputScript.cs` (an `'e'` token added
+  alongside wasd) since it now parses more than movement.
+
+  Two real bugs surfaced only by actually running a headless script, not by
+  reading the code: (1) the first cut computed the bumped tile as
+  `player.Column + delta` *after* `player.Move` already ran, which is right
+  only when the move was blocked — on a successful step toward an adjacent
+  NPC it silently checked one tile past where the player actually was,
+  firing dialogue a step early. (2) once dialogue locked out movement, a
+  move command already sitting in the headless input queue ahead of the
+  dismiss keystroke could never be drained (`TryGetMove` wasn't being called
+  at all while talking) — permanently jamming everything behind it, which
+  produced a genuine infinite busy-loop (confirmed via traced stderr output:
+  millions of identical "peeked a stale queued move" lines, no crash, no
+  further stdin reads). Fixed by computing the target from the player's
+  pre-move position and by unconditionally draining (and discarding) one
+  queued move per tick while talking, rather than skipping the call outright.
+- **Not yet wired**: the innkeeper actually healing a `Party`
+  (`Adventurer.FullyRestore()` already exists for this) — dialogue itself
+  now works for both NPCs.
 
 ## Designed but not yet built
 
@@ -319,8 +348,8 @@ Two corrections worth remembering:
   layer since they're rendered independently of terrain.
 
 Next session:
-1. Bump-to-talk NPC interaction — dialogue, innkeeper healing a real `Party`,
-   dock worker's line. Map-to-map transitions (`GameWorld`/portals) are done.
+1. The innkeeper actually healing a real `Party` (`Adventurer.FullyRestore()`
+   already exists). Dialogue/map transitions are both done.
 2. Build the black-void camera variant for interior scenes.
 3. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
    (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
@@ -414,3 +443,38 @@ input lockout, verified by counting ticks in the ASCII dump: player position
 holds at the old tile through fade-out, jumps to the new tile at the
 midpoint, holds again through fade-in, then moves again on the next real
 input.
+
+### 2026-09-09 — Session 8
+
+Added bump-to-talk NPC dialogue. `NpcDialogue` holds each NPC's lines,
+in code, keyed by id — matching what `NpcData.Id`'s doc comment already said
+("resolves to actual dialogue/behavior in code, not here"). `GameWorld` gained
+a dialogue queue (`TrySpeakTo`/`ActiveDialogueLine`/`AdvanceDialogue`/
+`IsTalking`); a new `IInputSource.TryGetConfirm()` (Enter/Space/E) advances or
+dismisses a line and locks out movement while talking.
+`Input/MoveScript.cs` → `Input/InputScript.cs` (adds an `'e'` token) since it
+now parses more than movement.
+
+Two real bugs only surfaced by actually running a headless script, not by
+reading the code:
+
+- **Wrong trigger tile.** First cut had `GameLoop` call `player.Move(...)`
+  then compute the bumped tile as `player.Column + delta` — correct only when
+  the move was *blocked* (position unchanged). On a successful step toward an
+  adjacent NPC, `player.Column` was already the new position, so adding the
+  delta again overshot by one tile and happened to land exactly on the NPC —
+  firing dialogue a full step early, mid-approach rather than on the actual
+  bump. Fixed by computing the target from the player's position *before*
+  calling `Move`.
+- **Queue jam → genuine infinite loop.** Once dialogue locked out movement,
+  `TryGetMove` was never called at all while talking — so a move command
+  already queued ahead of the dismiss keystroke (from the bug above firing
+  early, leaving the real bump's move still queued) could never be drained,
+  permanently blocking everything behind it. Confirmed via temporary stderr
+  tracing in `ConsoleInputSource`: millions of identical "peeked a stale
+  queued move, still not a confirm" lines, no crash, no further stdin reads —
+  a true busy-loop, not a hang on I/O (`timeout dotnet run` written to a file
+  produced ~22 million lines in 20 seconds). Fixed by having `GameLoop` still
+  call `TryGetMove` while talking, but discard whatever it returns — draining
+  the queue instead of skipping it outright. Both fixes verified together
+  with the same headless script that originally reproduced the hang.

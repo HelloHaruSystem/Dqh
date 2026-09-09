@@ -31,6 +31,12 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
         }
 
         Console.WriteLine($"Player at ({player.Column}, {player.Row})");
+
+        if (world.ActiveDialogueLine is { } activeLine)
+        {
+            Console.WriteLine($"> {activeLine} [e to continue]");
+        }
+
         Console.WriteLine();
     }
 
