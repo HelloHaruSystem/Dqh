@@ -6,8 +6,6 @@ namespace Dqh.Game.Presentation;
 internal sealed class ConsoleWorldPresenter : IWorldPresenter
 {
     private const char PlayerSymbol = '@';
-    private const char GrassSymbol = '.';
-    private const char EncounterZoneSymbol = '"';
 
     public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
     {
@@ -30,7 +28,20 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 
     private static char SymbolFor(TileType tile) => tile switch
     {
-        TileType.EncounterZone => EncounterZoneSymbol,
-        _ => GrassSymbol,
+        TileType.Grass => '.',
+        TileType.EncounterZone => '"',
+        TileType.Mountain => '^',
+        TileType.River => '~',
+        TileType.Path => '=',
+        TileType.Door => 'D',
+        TileType.Floor => '_',
+        TileType.Dock => '%',
+        TileType.Roof => 'A',
+        TileType.Wall => '#',
+        TileType.BarCounter => 'C',
+        TileType.BedHead => 'h',
+        TileType.BedFoot => 'f',
+        TileType.Table => 'T',
+        _ => '?',
     };
 }
