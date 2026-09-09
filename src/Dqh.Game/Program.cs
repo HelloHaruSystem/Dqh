@@ -1,32 +1,37 @@
+using Dqh.Game;
+using Dqh.Game.Input;
+using Dqh.Game.Presentation;
 using Dqh.Game.Rendering;
 using Dqh.Game.Settings;
 using Dqh.Game.World;
 using Raylib_cs;
 
-// Composition root: this is the only place concrete renderer types are chosen.
-// Everything else depends on ITileRenderer / IActorRenderer, so swapping in a
-// bitmap-based renderer later only means changing the two lines below.
+// Composition root: the only place that decides which concrete IInputSource/
+// IWorldPresenter to use. GameLoop itself never knows Raylib exists, which is
+// what makes headless mode possible: `dotnet run -- --headless` runs the exact
+// same tick loop with no window, reading moves from stdin one line at a time
+// instead of the keyboard, and dumping each frame as ASCII to the console.
 var map = new TileMap(GridSettings.Columns, GridSettings.Rows);
 var player = new PlayerMarker(map, GridSettings.Columns / 2, GridSettings.Rows / 2);
 
-ITileRenderer tileRenderer = new CheckerboardTileRenderer();
-IActorRenderer playerRenderer = new RectangleActorRenderer(Palette.Player);
+var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
 
-Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
-Raylib.SetTargetFPS(GridSettings.TargetFps);
-
-while (!Raylib.WindowShouldClose())
+if (headless)
 {
-    if (Raylib.IsKeyPressed(KeyboardKey.Right) || Raylib.IsKeyPressed(KeyboardKey.D)) player.Move(1, 0);
-    if (Raylib.IsKeyPressed(KeyboardKey.Left) || Raylib.IsKeyPressed(KeyboardKey.A)) player.Move(-1, 0);
-    if (Raylib.IsKeyPressed(KeyboardKey.Down) || Raylib.IsKeyPressed(KeyboardKey.S)) player.Move(0, 1);
-    if (Raylib.IsKeyPressed(KeyboardKey.Up) || Raylib.IsKeyPressed(KeyboardKey.W)) player.Move(0, -1);
+    IInputSource input = new ConsoleInputSource();
+    IWorldPresenter presenter = new ConsoleWorldPresenter();
 
-    Raylib.BeginDrawing();
-    Raylib.ClearBackground(Palette.WindowBackground);
-    tileRenderer.Draw(map);
-    playerRenderer.Draw(player.Column, player.Row);
-    Raylib.EndDrawing();
+    GameLoop.Run(map, player, input, presenter);
 }
+else
+{
+    Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
+    Raylib.SetTargetFPS(GridSettings.TargetFps);
 
-Raylib.CloseWindow();
+    IInputSource input = new RaylibInputSource();
+    IWorldPresenter presenter = new RaylibWorldPresenter(new CheckerboardTileRenderer(), new RectangleActorRenderer(Palette.Player));
+
+    GameLoop.Run(map, player, input, presenter);
+
+    Raylib.CloseWindow();
+}
