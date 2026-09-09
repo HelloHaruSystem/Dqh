@@ -8,7 +8,7 @@ namespace Dqh.Domain.Combatants.Monsters;
 /// A single generic monster battle entity, parameterized by a <see cref="MonsterDefinition"/>
 /// looked up from <see cref="MonsterBestiary"/> rather than one subclass per monster kind.
 /// </summary>
-public sealed class Monster : IMonster, IAttacker
+public sealed class Monster : IMonster, IAttacker, IFleeable
 {
     private readonly HitPointTrack _hitPoints;
     private readonly MonsterDefinition _definition;
@@ -42,5 +42,12 @@ public sealed class Monster : IMonster, IAttacker
         target.TakeDamage(AttackPower);
         var description = string.Format(_definition.AttackDescriptionTemplate, Name, target.Name);
         return $"{description}! ({AttackPower} damage)";
+    }
+
+    /// <summary>Rolls against this monster's own attack/flee weights.</summary>
+    public bool AttemptFlee()
+    {
+        var roll = Random.Shared.Next(_definition.AttackWeight + _definition.FleeWeight);
+        return roll < _definition.FleeWeight;
     }
 }

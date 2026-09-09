@@ -9,4 +9,5 @@ public enum MonsterKind
     Slime = 1,
     Dracky = 2,
     Ghost = 3,
+    MetalSlime = 4,
 }
