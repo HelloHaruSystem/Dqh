@@ -13,7 +13,7 @@ internal sealed class ConsoleInputSource : IInputSource
 
     public bool IsQuitRequested => _quitRequested;
 
-    public bool TryGetMove(out int columnDelta, out int rowDelta)
+    public bool TryGetMove(float deltaSeconds, out int columnDelta, out int rowDelta)
     {
         while (_pending.Count == 0 && !_quitRequested)
         {
