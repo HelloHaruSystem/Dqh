@@ -52,4 +52,7 @@ internal sealed class RaylibInputSource : IInputSource
 
     private static bool IsActive(KeyboardKey key, bool isDown) =>
         isDown ? Raylib.IsKeyDown(key) : Raylib.IsKeyPressed(key);
+
+    public bool TryGetConfirm() =>
+        Raylib.IsKeyPressed(KeyboardKey.Enter) || Raylib.IsKeyPressed(KeyboardKey.Space) || Raylib.IsKeyPressed(KeyboardKey.E);
 }

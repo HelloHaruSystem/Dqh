@@ -173,11 +173,126 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   decorations), so a rendered NPC is solid — the player can no longer walk
   through it invisibly. `ConsoleWorldPresenter`'s ASCII dump got matching
   symbols (`I` innkeeper, `W` dock worker) for headless parity.
-- **Not yet wired**: `Scene`/`Portal`/`GameWorld` (map-to-map transitions,
-  bump-to-talk NPC interaction, the innkeeper actually healing a `Party`) —
-  designed in an earlier plan-mode session, predates the asset-first pivot, and
-  still needs to be built against what actually exists now. NPCs render and
-  block movement; they don't do anything yet when bumped into.
+- **Map-to-map portals**: `World/GameWorld.cs` owns the currently-loaded map —
+  `Map`/`Decorations`/`Npcs`/`PlayerSpawn`, all delegating to whatever
+  `MapLoader.Load` last returned. `GameWorld.CheckPortal(player)` (called from
+  `GameLoop.Update` right after a successful `player.Move`) checks the
+  player's new tile against the current map's `Portals`; on a match it
+  reloads the target map (re-running `MapLoader.Load`, which re-blocks that
+  map's own decorations/NPCs for free) and calls the pre-existing
+  `PlayerMarker.WarpTo`. `Program.cs`/`GameLoop.Run` now pass a `GameWorld`
+  instead of a fixed `TileMap`/decorations/NPCs triplet, so the active map can
+  change mid-loop; `IWorldPresenter`/the renderers just draw whatever
+  `GameWorld` currently reports each frame (`IWorldPresenter.Present` was
+  later simplified to take the whole `GameWorld` instead of its
+  `Map`/`Decorations`/`Npcs` spelled out separately — see the fade-transition
+  bullet below, which is what actually forced that). Verified headless:
+  walking onto the overworld's door (9,19) lands in the inn at (5,8); walking
+  onto the inn's door (5,9) lands back on the overworld at (9,20). Caught and
+  fixed a map-data bug along the way: `overworld.json`'s portal targeted the
+  inn's own door tile (5,9) instead of its floor tile one
+  step off it (5,8) — the inn-to-overworld portal already had this right
+  (targets (9,20), not its own door at (9,19)); left uncaught it wouldn't
+  have looped, but would've dropped the player exactly on the threshold tile
+  instead of just inside.
+- **Fade-to-black map transition**: `GameWorld` now owns the transition
+  itself, not just the swap — `CheckPortal` starts a fade instead of swapping
+  immediately, `GameWorld.Tick(deltaSeconds, player)` ramps `TransitionFade`
+  0→1 over `TransitionSettings.FadeSeconds`, performs the actual
+  `MapLoader.Load`/`PlayerMarker.WarpTo` at the midpoint (full black), then
+  ramps 1→0 on the new map. `GameLoop.Update` calls `world.Tick` every frame
+  and skips reading movement input entirely while `world.IsTransitioning` —
+  input during the fade is simply not registered (real-time) / stays queued
+  untouched (headless), not lost. Forced `IWorldPresenter.Present` to take
+  the whole `GameWorld` instead of `Map`/`Decorations`/`Npcs` spelled out
+  separately, since a fourth per-frame value (the fade amount) made the
+  parameter list the wrong shape to keep extending; `RaylibWorldPresenter`
+  draws a black `Raylib.DrawRectangle` over the whole screen at
+  `TransitionFade` alpha after everything else. `ConsoleWorldPresenter`
+  accepts the same `GameWorld` but doesn't render the fade — headless output
+  is otherwise identical, just delayed by the transition's duration (verified
+  by counting ticks in the ASCII dump: player position holds at the old tile
+  for the fade-out half, jumps to the new tile at the midpoint, holds again
+  through fade-in, then resumes moving on the next real input).
+- **Face-and-confirm NPC dialogue, via a general `IInteractable`.** `NpcDialogue`
+  (static, keyed by NPC id — the behavior `NpcData.Id`'s doc comment always
+  said belonged in code, not the map JSON) holds each NPC's lines; `NpcData`
+  implements `IInteractable` (`Column`/`Row`/`Interact() -> IReadOnlyList<string>`)
+  so the interaction model isn't NPC-specific — a future sign or other prop
+  can implement it too, without touching `GameWorld`. `GameWorld` tracks a
+  `Queue<string>` of dialogue lines (`ActiveDialogueLine`/`AdvanceDialogue`/
+  `IsTalking`) plus `IsFacingInteractable(player)`/`TryInteractWithFaced(player)`,
+  which look up whatever tile is immediately in front of the player (from
+  `PlayerMarker.Facing`) rather than the tile they're standing on.
+  `IInputSource.TryGetConfirm()` (Enter/Space/E in `RaylibInputSource`, an
+  `'e'` token in headless scripts via `Input/InputScript.cs`) opens the
+  dialogue when facing something interactable, or advances/dismisses it once
+  open; movement locks out entirely while talking. `RaylibWorldPresenter`
+  draws the active line in a bottom-screen box, and a small "Press Enter to
+  chat" pill top-center of the screen whenever the player faces something
+  interactable and isn't already talking (`UiSettings`/`Palette` entries);
+  `ConsoleWorldPresenter` prints the equivalent as extra lines for headless
+  parity.
+
+  This replaced an earlier bump-to-talk cut (walking *into* an NPC
+  auto-triggered dialogue) after actually running it surfaced two real bugs:
+  (1) the trigger tile was computed as `player.Column + delta` *after*
+  `player.Move` already ran, which is only correct when the move was
+  blocked — on a successful step toward an adjacent NPC it silently checked
+  one tile past where the player actually was, firing dialogue a step early;
+  (2) once dialogue locked out movement, a move command already queued ahead
+  of the dismiss keystroke could never be drained (`TryGetMove` wasn't being
+  called at all while talking), permanently jamming everything behind it —
+  a genuine infinite busy-loop, confirmed via traced stderr output (millions
+  of identical "peeked a stale queued move" lines in seconds, no crash, no
+  further stdin reads). Moving to face-and-confirm sidesteps both: the
+  interact check runs continuously off current facing rather than off a
+  move's before/after state, and a confirm press is only ever consumed when
+  something is actually being interacted with or dismissed.
+- **Opening title screen.** `GameWorld.IsShowingWelcome` starts `true`;
+  `GameLoop.Update` only polls confirm while it's set, calling
+  `DismissWelcome()` on the first press — no movement, no world ticking,
+  until then. `RaylibWorldPresenter` draws it as a full-screen opaque
+  overlay ("Welcome to DQH" / "Press Enter to begin"); `ConsoleWorldPresenter`
+  prints the equivalent and skips the map dump entirely while it's showing.
+- **Yes/no dialogue choices; innkeeper stay-the-night flow.** `DialogueStep`
+  (`World/DialogueStep.cs`) is either a `DialogueLine` or a `DialogueChoice`
+  (prompt + yes/no labels + `Action` callbacks); `GameWorld`'s dialogue queue
+  holds a mix of both. `IInteractable.Interact` changed from returning plain
+  lines to `void Interact(GameWorld world, PlayerMarker player)` — an
+  interactable now drives the world directly (queue lines, queue a choice,
+  or both), rather than `GameWorld` just reading static text off it.
+  `NpcData.Interact` delegates to a new `NpcBehaviors.Interact(npc, world,
+  player)`, which dispatches by id: NPCs with nothing but canned lines still
+  go through `NpcDialogue`, but `"innkeeper"` gets real code (`NpcBehaviors`)
+  that asks "stay the night?" and, on yes, calls the map-generalized
+  `GameWorld.StartRelocation` (below) to move the player beside the inn's
+  first bed; on no, queues a decline line instead. `GameWorld.Tick`'s
+  transition logic was generalized from "always reloads a target map" to
+  an internal `PendingTransition(TargetMap?, TargetColumn, TargetRow)` — a
+  portal crossing sets `TargetMap`, a same-map relocation leaves it null, and
+  both play the identical fade. Up/down while a choice is shown flips
+  `ChoiceYesSelected`; confirm commits it. `RaylibWorldPresenter`/
+  `ConsoleWorldPresenter` both got the equivalent choice UI.
+
+  Caught (again) by actually running a headless script, not by reading the
+  code: after adding the choice, `GameLoop`'s talking branch called *both*
+  `TryGetConfirm()` and `TryGetMove()` every tick unconditionally, in the
+  name of never leaving a stray queued move stuck ahead of a confirm
+  (session 8's fix). But each headless script line is one tick's worth of
+  input — when confirm's call already consumed a tick's real token, the
+  second, "just in case" `TryGetMove` call still triggered a fresh blocking
+  read of the *next* line, occasionally pulling in a trailing `q` a tick
+  early and quitting before an in-flight relocation had finished (so it
+  looked like the innkeeper's "yes" silently did nothing, when actually the
+  transition just never got the ticks to complete). Fixed by making the two
+  calls mutually exclusive per tick — `TryGetMove` is only ever reached when
+  `confirmPressed` was false that tick, whether that's to read an up/down
+  toggle or, when there's no choice to toggle, to drain a stray move.
+- **Not yet wired**: the innkeeper actually healing a `Party` — there's no
+  `Party` instance running in `Dqh.Game` yet at all (it stays purely a
+  `Dqh.Domain` concept until battle/party wiring lands), so "yes" currently
+  just relocates the player with no mechanical effect.
 
 ## Designed but not yet built
 
@@ -185,11 +300,10 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - `IEncounterGenerator` (factory for random encounters on overworld tiles)
 - `IBattleResolver` (swappable battle resolution, using `Party.ChooseTarget` and
   `Monster.AttemptFlee`/`PerformAttack` to actually run a fight turn by turn)
-- `Scene`/`Portal`/`GameWorld` in `Dqh.Game` — map-to-map transitions (walking
-  through the Inn's door and back), bump-to-talk NPC interaction, the
-  innkeeper healing a constructed `Party` via `Adventurer.FullyRestore()`, the
-  dock worker's "no boats today" line. Assets/maps/camera/movement/NPC
-  rendering are all in place for this now; it's purely the wiring left.
+- Bump-to-talk NPC interaction, the innkeeper healing a constructed `Party`
+  via `Adventurer.FullyRestore()`, the dock worker's "no boats today" line —
+  map-to-map transitions themselves (`GameWorld`/portals) are now built; this
+  is specifically about the player bumping into an NPC's tile.
 - The black-void (unclamped) `Camera` variant for interior scenes
 - Wiring `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop
   (stepping onto an `EncounterZone` tile should trigger a fight)
@@ -279,9 +393,8 @@ Two corrections worth remembering:
   layer since they're rendered independently of terrain.
 
 Next session:
-1. Build `Scene`/`Portal`/`GameWorld` — the Inn door transition, bump-to-talk
-   NPC interaction (NPCs render and block movement now, but do nothing yet
-   when bumped into), innkeeper healing a real `Party`, dock worker's line.
+1. The innkeeper actually healing a real `Party` (`Adventurer.FullyRestore()`
+   already exists). Dialogue/map transitions are both done.
 2. Build the black-void camera variant for interior scenes.
 3. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
    (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
@@ -314,7 +427,7 @@ un-DQ-authentic feel, not the actual bug.
 
 ### 2026-09-09 — Session 5
 
-Rendered the NPCs (`innkeeper`, `dockWorker`) that were already sitting in the
+Rendered the NPCs (`innkeeper`, `dock_worker`) that were already sitting in the
 map JSON with no visual. `NpcRenderer` mirrors `PropRenderer`'s shape (per-id
 cached texture from `Assets/Characters`, culled to camera) — kept as its own
 class rather than unifying with `PropRenderer` despite the near-identical draw
@@ -325,5 +438,140 @@ presenters/`Program.cs` the same way `DecorationData` already flows.
 `MapLoader.Load` now also calls the existing `TileMap.Block` for each NPC
 position (the same one-liner already used for decorations) — without it, a
 now-visible NPC would let the player walk straight through it. Bump-to-talk
-interaction itself stays out of scope, deferred to the `Scene`/`Portal`/
-`GameWorld` wiring next session.
+interaction itself stays out of scope, deferred to a later session.
+
+Shipped with a bug: `overworld.json`'s dock worker was `"id": "dockWorker"`,
+but the actual asset (like every other multi-word asset in the project —
+`bar_counter.png`, `bed_head.png`, `encounter_zone.png`) is snake_case,
+`dock_worker.png`. `Raylib.LoadTexture` on a missing path fails silently
+(a 0x0 texture that draws nothing) rather than throwing, so the NPC blocked
+movement correctly but rendered as nothing — caught via playtesting
+("it doesn't render but it blocks the worker"), fixed by renaming the id to
+`dock_worker` to match convention rather than renaming the asset.
+
+### 2026-09-09 — Session 6
+
+Wired map-to-map portals: `World/GameWorld.cs` owns whichever map is
+currently loaded (`Map`/`Decorations`/`Npcs`/`PlayerSpawn`, delegating to
+`MapLoader.Load`'s result) and `CheckPortal(player)` swaps it — reloading the
+target map (which re-blocks its own decorations/NPCs for free, reusing
+`MapLoader.Load` as-is) and calling the already-existing
+`PlayerMarker.WarpTo`. `GameLoop.Update` calls it right after a successful
+`player.Move`. `Program.cs`/`GameLoop.Run` now thread a `GameWorld` through
+instead of a fixed `TileMap`/decorations/NPCs triplet — `IWorldPresenter` and
+every renderer are untouched, since they only ever drew whatever they were
+handed per frame, not the map itself. Caught a map-data bug while verifying:
+`overworld.json`'s portal targeted the inn's own door tile (5,9) instead of
+its floor tile one step off it (5,8) — asymmetric with the inn's own portal,
+which already correctly targets the overworld's floor at (9,20) rather than
+its own door at (9,19). Verified both directions headless: walking onto
+(9,19) lands in the inn at (5,8); walking onto the inn's (5,9) lands back at
+(9,20).
+
+### 2026-09-09 — Session 7
+
+Added the fade-to-black transition across a map change (the instant jump-cut
+from session 6 "works but we maybe need some animation for when entering and
+leaving"). `GameWorld` now drives the fade itself — `CheckPortal` starts it
+instead of swapping immediately, `Tick(deltaSeconds, player)` ramps
+`TransitionFade` 0→1→0 over two `TransitionSettings.FadeSeconds` halves,
+performing the actual map swap/warp at the midpoint (full black), and
+`GameLoop.Update` skips movement input entirely while `world.IsTransitioning`
+so nothing moves during the fade. This forced `IWorldPresenter.Present` to
+change shape — `Map`/`Decorations`/`Npcs` spelled out as three separate
+parameters plus a fourth for the fade amount was the wrong direction to keep
+extending, so it now just takes the whole `GameWorld`; `RaylibWorldPresenter`
+draws a full-screen black rectangle at `TransitionFade` alpha,
+`ConsoleWorldPresenter` ignores the fade (headless stays visually
+unaffected, same precedent as the camera) but still experiences the same
+input lockout, verified by counting ticks in the ASCII dump: player position
+holds at the old tile through fade-out, jumps to the new tile at the
+midpoint, holds again through fade-in, then moves again on the next real
+input.
+
+### 2026-09-09 — Session 8
+
+Added bump-to-talk NPC dialogue. `NpcDialogue` holds each NPC's lines,
+in code, keyed by id — matching what `NpcData.Id`'s doc comment already said
+("resolves to actual dialogue/behavior in code, not here"). `GameWorld` gained
+a dialogue queue (`TrySpeakTo`/`ActiveDialogueLine`/`AdvanceDialogue`/
+`IsTalking`); a new `IInputSource.TryGetConfirm()` (Enter/Space/E) advances or
+dismisses a line and locks out movement while talking.
+`Input/MoveScript.cs` → `Input/InputScript.cs` (adds an `'e'` token) since it
+now parses more than movement.
+
+Two real bugs only surfaced by actually running a headless script, not by
+reading the code:
+
+- **Wrong trigger tile.** First cut had `GameLoop` call `player.Move(...)`
+  then compute the bumped tile as `player.Column + delta` — correct only when
+  the move was *blocked* (position unchanged). On a successful step toward an
+  adjacent NPC, `player.Column` was already the new position, so adding the
+  delta again overshot by one tile and happened to land exactly on the NPC —
+  firing dialogue a full step early, mid-approach rather than on the actual
+  bump. Fixed by computing the target from the player's position *before*
+  calling `Move`.
+- **Queue jam → genuine infinite loop.** Once dialogue locked out movement,
+  `TryGetMove` was never called at all while talking — so a move command
+  already queued ahead of the dismiss keystroke (from the bug above firing
+  early, leaving the real bump's move still queued) could never be drained,
+  permanently blocking everything behind it. Confirmed via temporary stderr
+  tracing in `ConsoleInputSource`: millions of identical "peeked a stale
+  queued move, still not a confirm" lines, no crash, no further stdin reads —
+  a true busy-loop, not a hang on I/O (`timeout dotnet run` written to a file
+  produced ~22 million lines in 20 seconds). Fixed by having `GameLoop` still
+  call `TryGetMove` while talking, but discard whatever it returns — draining
+  the queue instead of skipping it outright. Both fixes verified together
+  with the same headless script that originally reproduced the hang.
+
+### 2026-09-09 — Session 9
+
+Two follow-ups from actually playing session 8's dialogue: swap bump-to-talk
+for a facing-and-confirm model, and add an opening title screen.
+
+Introduced `IInteractable` (`Column`/`Row`/`Interact() -> IReadOnlyList<string>`)
+per the user's suggestion, specifically so the interaction model isn't
+hard-wired to NPCs — a sign or other prop can implement it later without
+`GameWorld` caring which concrete type it's looking at. `NpcData` implements
+it now (`Interact()` just delegates to the existing `NpcDialogue.LinesFor`).
+`GameWorld.TrySpeakTo(column, row)` (bump-triggered) became
+`IsFacingInteractable(player)`/`TryInteractWithFaced(player)`, both querying
+a new private `FacedTile(player)` (the tile in front of `player.Facing`) and
+a `FindInteractableAt(column, row)` that currently only searches NPCs but
+doesn't need to know that from the outside. `GameLoop.Update` no longer ties
+interaction to a move attempt at all — confirm is checked first each tick;
+if pressed, it either opens/advances dialogue or interacts with whatever's
+faced, and movement is only attempted when confirm wasn't pressed.
+
+Added the opening title screen the same way as the other blocking overlays
+(the fade transition, the dialogue box): a bit of state on `GameWorld`
+(`IsShowingWelcome`, default `true`) that `GameLoop.Update` checks first and
+returns early on until dismissed. `Settings/DialogueSettings.cs` renamed to
+`UiSettings.cs` and gained the interact-prompt and title font/layout
+constants, since by now it covered more than just the dialogue box.
+
+Verified headless end to end: `e` dismisses the welcome screen, walking to
+and bumping the innkeeper shows the "facing something" prompt (not
+dialogue), a second `e` opens the dialogue, a third dismisses it back to the
+prompt (still facing them) — and `q` during the welcome screen quits cleanly
+instead of hanging, since the outer loop's quit check doesn't depend on
+`GameWorld` state at all.
+
+### 2026-09-09 — Session 10
+
+Added yes/no dialogue choices and the innkeeper's stay-the-night flow — see
+"What's actually built" above for the final shape (`DialogueStep`,
+`IInteractable.Interact` now driving `GameWorld` directly, `NpcBehaviors`,
+`GameWorld.StartRelocation` generalizing the portal transition to same-map
+moves). Caught the same class of bug as session 8 one layer up: calling both
+`TryGetConfirm`/`TryGetMove` unconditionally per tick could over-read a
+headless script by one line, quitting before an in-flight relocation
+finished — fixed by making the two mutually exclusive per tick. Verified
+both the "yes" (relocates beside the bed) and "no" (decline line, no
+relocation) paths headless, each quitting cleanly.
+
+Flagged for a later session, not done now: the user asked for a look at
+whether the accumulated `Dqh.Game` changes (animation, NPCs, portals,
+transitions, dialogue, choices, welcome screen — sessions 4 through 10) are
+still well-structured, given how much has landed without a dedicated pass to
+step back and check. That review is still pending.
