@@ -25,6 +25,8 @@ internal static class GameLoop
 
     private static void Update(PlayerMarker player, IInputSource input, float deltaSeconds)
     {
+        player.Tick(deltaSeconds);
+
         if (input.TryGetMove(deltaSeconds, out var columnDelta, out var rowDelta))
         {
             player.Move(columnDelta, rowDelta);

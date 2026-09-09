@@ -28,7 +28,7 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         Raylib.ClearBackground(Palette.WindowBackground);
         _tileRenderer.Draw(map, camera, viewport);
         _propRenderer.Draw(decorations, camera, viewport);
-        _playerRenderer.Draw(player.Column, player.Row, camera, viewport);
+        _playerRenderer.Draw(player.Column, player.Row, player.Facing, player.WalkFrame, camera, viewport);
         Raylib.EndDrawing();
     }
 }
