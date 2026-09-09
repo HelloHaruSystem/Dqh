@@ -43,26 +43,80 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         {
             DrawDialogueBox(line);
         }
+        else if (!world.IsShowingWelcome && world.TransitionFade == 0f && world.IsFacingInteractable(player))
+        {
+            DrawInteractPrompt();
+        }
+
+        if (world.IsShowingWelcome)
+        {
+            DrawWelcomeScreen();
+        }
 
         Raylib.EndDrawing();
     }
 
     private static void DrawDialogueBox(string line)
     {
-        var margin = DialogueSettings.BoxMarginPixels;
+        var margin = UiSettings.DialogueBoxMarginPixels;
         var screenWidth = Raylib.GetScreenWidth();
         var screenHeight = Raylib.GetScreenHeight();
-        var boxHeight = screenHeight / DialogueSettings.BoxHeightDivisor;
+        var boxHeight = screenHeight / UiSettings.DialogueBoxHeightDivisor;
         var boxY = screenHeight - boxHeight - margin;
 
         Raylib.DrawRectangle(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBackground);
         Raylib.DrawRectangleLines(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBorder);
-        Raylib.DrawText(line, margin * 2, boxY + margin, DialogueSettings.LineFontSize, Palette.DialogueLineText);
+        Raylib.DrawText(line, margin * 2, boxY + margin, UiSettings.DialogueLineFontSize, Palette.DialogueLineText);
         Raylib.DrawText(
             "[Enter/Space/E] continue",
             margin * 2,
-            boxY + boxHeight - margin - DialogueSettings.ContinueHintFontSize,
-            DialogueSettings.ContinueHintFontSize,
+            boxY + boxHeight - margin - UiSettings.ContinueHintFontSize,
+            UiSettings.ContinueHintFontSize,
+            Palette.DialogueContinueHintText);
+    }
+
+    private static void DrawInteractPrompt()
+    {
+        const string text = "Press Enter to chat";
+        var fontSize = UiSettings.InteractPromptFontSize;
+        var padding = UiSettings.InteractPromptPaddingPixels;
+        var textWidth = Raylib.MeasureText(text, fontSize);
+        var screenWidth = Raylib.GetScreenWidth();
+
+        var boxWidth = textWidth + padding * 2;
+        var boxX = (screenWidth - boxWidth) / 2;
+        var boxY = UiSettings.InteractPromptTopMarginPixels;
+        var boxHeight = fontSize + padding * 2;
+
+        Raylib.DrawRectangle(boxX, boxY, boxWidth, boxHeight, Palette.DialogueBoxBackground);
+        Raylib.DrawRectangleLines(boxX, boxY, boxWidth, boxHeight, Palette.DialogueBoxBorder);
+        Raylib.DrawText(text, boxX + padding, boxY + padding, fontSize, Palette.DialogueLineText);
+    }
+
+    private static void DrawWelcomeScreen()
+    {
+        const string title = "Welcome to DQH";
+        const string hint = "Press Enter to begin";
+
+        var screenWidth = Raylib.GetScreenWidth();
+        var screenHeight = Raylib.GetScreenHeight();
+
+        Raylib.DrawRectangle(0, 0, screenWidth, screenHeight, Palette.WelcomeOverlayBackground);
+
+        var titleWidth = Raylib.MeasureText(title, UiSettings.TitleFontSize);
+        var hintWidth = Raylib.MeasureText(hint, UiSettings.ContinueHintFontSize);
+
+        Raylib.DrawText(
+            title,
+            (screenWidth - titleWidth) / 2,
+            screenHeight / 2 - UiSettings.TitleFontSize,
+            UiSettings.TitleFontSize,
+            Palette.DialogueLineText);
+        Raylib.DrawText(
+            hint,
+            (screenWidth - hintWidth) / 2,
+            screenHeight / 2 + UiSettings.TitleFontSize,
+            UiSettings.ContinueHintFontSize,
             Palette.DialogueContinueHintText);
     }
 }

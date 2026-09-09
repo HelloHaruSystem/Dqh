@@ -29,10 +29,15 @@ internal sealed class GameWorld
 
     public bool IsTalking => _dialogueLines.Count > 0;
 
+    /// <summary>True until the player dismisses the opening title screen.</summary>
+    public bool IsShowingWelcome { get; private set; } = true;
+
     public GameWorld(string startingMapName)
     {
         _current = MapLoader.Load(startingMapName);
     }
+
+    public void DismissWelcome() => IsShowingWelcome = false;
 
     /// <summary>If the player is standing on a portal, starts the fade-out that will lead into it.</summary>
     public void CheckPortal(PlayerMarker player)
@@ -74,15 +79,23 @@ internal sealed class GameWorld
             : 1f - (_transitionElapsed - half) / half;
     }
 
-    /// <summary>If the given tile is an NPC's, queues that NPC's dialogue. Pass the tile the player attempted to step onto — computed before the move, since a bump never actually relocates the player.</summary>
-    public void TrySpeakTo(int targetColumn, int targetRow)
+    /// <summary>Whether the tile the player is currently facing holds something interactable.</summary>
+    public bool IsFacingInteractable(PlayerMarker player)
+    {
+        var (column, row) = FacedTile(player);
+        return FindInteractableAt(column, row) is not null;
+    }
+
+    /// <summary>Interacts with whatever the player is currently facing, queuing its lines. A no-op when there's nothing there.</summary>
+    public void TryInteractWithFaced(PlayerMarker player)
     {
         if (IsTransitioning || IsTalking) return;
 
-        var npc = _current.Entities.Npcs.FirstOrDefault(n => n.Column == targetColumn && n.Row == targetRow);
-        if (npc is null) return;
+        var (column, row) = FacedTile(player);
+        var interactable = FindInteractableAt(column, row);
+        if (interactable is null) return;
 
-        foreach (var line in NpcDialogue.LinesFor(npc.Id))
+        foreach (var line in interactable.Interact())
         {
             _dialogueLines.Enqueue(line);
         }
@@ -93,4 +106,17 @@ internal sealed class GameWorld
     {
         if (_dialogueLines.Count > 0) _dialogueLines.Dequeue();
     }
+
+    private IInteractable? FindInteractableAt(int column, int row) =>
+        _current.Entities.Npcs.FirstOrDefault(n => n.Column == column && n.Row == row);
+
+    /// <summary>The tile immediately in front of the player, in whichever direction they're facing.</summary>
+    private static (int Column, int Row) FacedTile(PlayerMarker player) => player.Facing switch
+    {
+        Direction.Up => (player.Column, player.Row - 1),
+        Direction.Down => (player.Column, player.Row + 1),
+        Direction.Left => (player.Column - 1, player.Row),
+        Direction.Right => (player.Column + 1, player.Row),
+        _ => (player.Column, player.Row),
+    };
 }

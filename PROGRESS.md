@@ -214,37 +214,47 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   by counting ticks in the ASCII dump: player position holds at the old tile
   for the fade-out half, jumps to the new tile at the midpoint, holds again
   through fade-in, then resumes moving on the next real input).
-- **Bump-to-talk NPC dialogue**: `NpcDialogue` (static, keyed by NPC id — the
-  behavior the existing `NpcData.Id` doc comment always said belonged in
-  code, not the map JSON) holds each NPC's lines. `GameWorld` gained a
-  `Queue<string>` of dialogue lines — `TrySpeakTo(targetColumn, targetRow)`
-  enqueues an NPC's lines when that tile is bumped, `ActiveDialogueLine`
-  peeks the front, `AdvanceDialogue()` dequeues it. `GameLoop.Update` now
-  computes the attempted destination *before* calling `player.Move`, so
-  `TrySpeakTo` checks the tile actually being bumped rather than one
-  computed off wherever the player ended up; polls a new
-  `IInputSource.TryGetConfirm()` every tick (Enter/Space/E in
-  `RaylibInputSource`) to advance/dismiss a line, and locks out movement
-  entirely while `world.IsTalking`. `RaylibWorldPresenter` draws the line in
-  a bottom-screen box (`DialogueSettings`/new `Palette` entries);
-  `ConsoleWorldPresenter` prints it as an extra line for headless parity.
-  `Input/MoveScript.cs` became `Input/InputScript.cs` (an `'e'` token added
-  alongside wasd) since it now parses more than movement.
+- **Face-and-confirm NPC dialogue, via a general `IInteractable`.** `NpcDialogue`
+  (static, keyed by NPC id — the behavior `NpcData.Id`'s doc comment always
+  said belonged in code, not the map JSON) holds each NPC's lines; `NpcData`
+  implements `IInteractable` (`Column`/`Row`/`Interact() -> IReadOnlyList<string>`)
+  so the interaction model isn't NPC-specific — a future sign or other prop
+  can implement it too, without touching `GameWorld`. `GameWorld` tracks a
+  `Queue<string>` of dialogue lines (`ActiveDialogueLine`/`AdvanceDialogue`/
+  `IsTalking`) plus `IsFacingInteractable(player)`/`TryInteractWithFaced(player)`,
+  which look up whatever tile is immediately in front of the player (from
+  `PlayerMarker.Facing`) rather than the tile they're standing on.
+  `IInputSource.TryGetConfirm()` (Enter/Space/E in `RaylibInputSource`, an
+  `'e'` token in headless scripts via `Input/InputScript.cs`) opens the
+  dialogue when facing something interactable, or advances/dismisses it once
+  open; movement locks out entirely while talking. `RaylibWorldPresenter`
+  draws the active line in a bottom-screen box, and a small "Press Enter to
+  chat" pill top-center of the screen whenever the player faces something
+  interactable and isn't already talking (`UiSettings`/`Palette` entries);
+  `ConsoleWorldPresenter` prints the equivalent as extra lines for headless
+  parity.
 
-  Two real bugs surfaced only by actually running a headless script, not by
-  reading the code: (1) the first cut computed the bumped tile as
-  `player.Column + delta` *after* `player.Move` already ran, which is right
-  only when the move was blocked — on a successful step toward an adjacent
-  NPC it silently checked one tile past where the player actually was,
-  firing dialogue a step early. (2) once dialogue locked out movement, a
-  move command already sitting in the headless input queue ahead of the
-  dismiss keystroke could never be drained (`TryGetMove` wasn't being called
-  at all while talking) — permanently jamming everything behind it, which
-  produced a genuine infinite busy-loop (confirmed via traced stderr output:
-  millions of identical "peeked a stale queued move" lines, no crash, no
-  further stdin reads). Fixed by computing the target from the player's
-  pre-move position and by unconditionally draining (and discarding) one
-  queued move per tick while talking, rather than skipping the call outright.
+  This replaced an earlier bump-to-talk cut (walking *into* an NPC
+  auto-triggered dialogue) after actually running it surfaced two real bugs:
+  (1) the trigger tile was computed as `player.Column + delta` *after*
+  `player.Move` already ran, which is only correct when the move was
+  blocked — on a successful step toward an adjacent NPC it silently checked
+  one tile past where the player actually was, firing dialogue a step early;
+  (2) once dialogue locked out movement, a move command already queued ahead
+  of the dismiss keystroke could never be drained (`TryGetMove` wasn't being
+  called at all while talking), permanently jamming everything behind it —
+  a genuine infinite busy-loop, confirmed via traced stderr output (millions
+  of identical "peeked a stale queued move" lines in seconds, no crash, no
+  further stdin reads). Moving to face-and-confirm sidesteps both: the
+  interact check runs continuously off current facing rather than off a
+  move's before/after state, and a confirm press is only ever consumed when
+  something is actually being interacted with or dismissed.
+- **Opening title screen.** `GameWorld.IsShowingWelcome` starts `true`;
+  `GameLoop.Update` only polls confirm while it's set, calling
+  `DismissWelcome()` on the first press — no movement, no world ticking,
+  until then. `RaylibWorldPresenter` draws it as a full-screen opaque
+  overlay ("Welcome to DQH" / "Press Enter to begin"); `ConsoleWorldPresenter`
+  prints the equivalent and skips the map dump entirely while it's showing.
 - **Not yet wired**: the innkeeper actually healing a `Party`
   (`Adventurer.FullyRestore()` already exists for this) — dialogue itself
   now works for both NPCs.
@@ -478,3 +488,36 @@ reading the code:
   call `TryGetMove` while talking, but discard whatever it returns — draining
   the queue instead of skipping it outright. Both fixes verified together
   with the same headless script that originally reproduced the hang.
+
+### 2026-09-09 — Session 9
+
+Two follow-ups from actually playing session 8's dialogue: swap bump-to-talk
+for a facing-and-confirm model, and add an opening title screen.
+
+Introduced `IInteractable` (`Column`/`Row`/`Interact() -> IReadOnlyList<string>`)
+per the user's suggestion, specifically so the interaction model isn't
+hard-wired to NPCs — a sign or other prop can implement it later without
+`GameWorld` caring which concrete type it's looking at. `NpcData` implements
+it now (`Interact()` just delegates to the existing `NpcDialogue.LinesFor`).
+`GameWorld.TrySpeakTo(column, row)` (bump-triggered) became
+`IsFacingInteractable(player)`/`TryInteractWithFaced(player)`, both querying
+a new private `FacedTile(player)` (the tile in front of `player.Facing`) and
+a `FindInteractableAt(column, row)` that currently only searches NPCs but
+doesn't need to know that from the outside. `GameLoop.Update` no longer ties
+interaction to a move attempt at all — confirm is checked first each tick;
+if pressed, it either opens/advances dialogue or interacts with whatever's
+faced, and movement is only attempted when confirm wasn't pressed.
+
+Added the opening title screen the same way as the other blocking overlays
+(the fade transition, the dialogue box): a bit of state on `GameWorld`
+(`IsShowingWelcome`, default `true`) that `GameLoop.Update` checks first and
+returns early on until dismissed. `Settings/DialogueSettings.cs` renamed to
+`UiSettings.cs` and gained the interact-prompt and title font/layout
+constants, since by now it covered more than just the dialogue box.
+
+Verified headless end to end: `e` dismisses the welcome screen, walking to
+and bumping the innkeeper shows the "facing something" prompt (not
+dialogue), a second `e` opens the dialogue, a third dismisses it back to the
+prompt (still facing them) — and `q` during the welcome screen quits cleanly
+instead of hanging, since the outer loop's quit check doesn't depend on
+`GameWorld` state at all.

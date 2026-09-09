@@ -11,4 +11,6 @@ internal static class Palette
     public static readonly Color DialogueBoxBorder = Color.White;
     public static readonly Color DialogueLineText = Color.White;
     public static readonly Color DialogueContinueHintText = Color.LightGray;
+
+    public static readonly Color WelcomeOverlayBackground = new((byte)5, (byte)5, (byte)20, (byte)255);
 }

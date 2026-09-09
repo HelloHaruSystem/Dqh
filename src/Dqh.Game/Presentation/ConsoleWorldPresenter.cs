@@ -9,6 +9,14 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 
     public void Present(GameWorld world, PlayerMarker player, float deltaSeconds)
     {
+        if (world.IsShowingWelcome)
+        {
+            Console.WriteLine("=== Welcome to DQH ===");
+            Console.WriteLine("[e to begin]");
+            Console.WriteLine();
+            return;
+        }
+
         var occupantSymbols = world.Decorations.ToDictionary(d => (d.Column, d.Row), d => SymbolFor(d.Id));
         foreach (var npc in world.Npcs)
         {
@@ -35,6 +43,10 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
         if (world.ActiveDialogueLine is { } activeLine)
         {
             Console.WriteLine($"> {activeLine} [e to continue]");
+        }
+        else if (world.IsFacingInteractable(player))
+        {
+            Console.WriteLine("[facing something — e to chat]");
         }
 
         Console.WriteLine();
