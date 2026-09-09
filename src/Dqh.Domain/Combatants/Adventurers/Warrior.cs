@@ -1,6 +1,7 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>Frontline fighter: strong melee damage, can brace against incoming hits.</summary>
 public sealed class Warrior : Adventurer, IAttacker, IDefender

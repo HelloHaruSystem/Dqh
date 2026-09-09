@@ -1,6 +1,7 @@
+using Dqh.Domain.Combatants;
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Monsters;
 
 /// <summary>A monster: an <see cref="ICombatant"/> with battle stats and elemental weaknesses.</summary>
 public interface IMonster : ICombatant

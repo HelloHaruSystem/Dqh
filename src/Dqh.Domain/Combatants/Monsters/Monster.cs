@@ -1,7 +1,8 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Monsters;
 
 /// <summary>
 /// A single generic monster battle entity, parameterized by a <see cref="MonsterDefinition"/>

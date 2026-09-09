@@ -1,7 +1,8 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>Arcane damage-dealer with a small spellbook; the signature move casts its strongest known spell.</summary>
 public sealed class Mage : Adventurer, ISpellcaster

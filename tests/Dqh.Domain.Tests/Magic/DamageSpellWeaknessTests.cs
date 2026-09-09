@@ -1,4 +1,5 @@
-using Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants.Adventurers;
+using Dqh.Domain.Combatants.Monsters;
 using Dqh.Domain.Magic;
 
 namespace Dqh.Domain.Tests.Magic;

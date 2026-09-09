@@ -1,6 +1,6 @@
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Monsters;
 
 /// <summary>
 /// Immutable stat template for a <see cref="MonsterKind"/>, looked up from

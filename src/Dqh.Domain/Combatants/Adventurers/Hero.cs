@@ -1,6 +1,7 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>The party's protagonist: a capable fighter in their own right, distinct from a plain Warrior.</summary>
 public sealed class Hero : Adventurer, IAttacker

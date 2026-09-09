@@ -1,6 +1,7 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>Ranged attacker who can disengage from battle when things go wrong.</summary>
 public sealed class Ranger : Adventurer, IAttacker, IFleeable

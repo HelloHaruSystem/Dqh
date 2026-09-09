@@ -1,4 +1,6 @@
-namespace Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants;
+
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>
 /// A party member. Encapsulates hit points and mana (0-100, invalid values are
