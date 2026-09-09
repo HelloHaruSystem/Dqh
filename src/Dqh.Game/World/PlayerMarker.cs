@@ -25,7 +25,7 @@ internal sealed class PlayerMarker
 
         if (newColumn < 0 || newColumn >= _map.Columns) return;
         if (newRow < 0 || newRow >= _map.Rows) return;
-        if (!_map.GetTile(newColumn, newRow).IsWalkable()) return;
+        if (!_map.IsWalkable(newColumn, newRow)) return;
 
         Column = newColumn;
         Row = newRow;

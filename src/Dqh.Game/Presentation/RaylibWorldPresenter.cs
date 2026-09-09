@@ -10,14 +10,16 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
 {
     private readonly ITileRenderer _tileRenderer;
     private readonly IActorRenderer _playerRenderer;
+    private readonly PropRenderer _propRenderer;
 
-    public RaylibWorldPresenter(ITileRenderer tileRenderer, IActorRenderer playerRenderer)
+    public RaylibWorldPresenter(ITileRenderer tileRenderer, IActorRenderer playerRenderer, PropRenderer propRenderer)
     {
         _tileRenderer = tileRenderer;
         _playerRenderer = playerRenderer;
+        _propRenderer = propRenderer;
     }
 
-    public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
+    public void Present(TileMap map, IReadOnlyList<DecorationData> decorations, PlayerMarker player, float deltaSeconds)
     {
         var camera = Camera.Follow(map, player.Column, player.Row, GridSettings.CameraColumns, GridSettings.CameraRows);
         var viewport = Viewport.Fit(camera.VisibleColumns, camera.VisibleRows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
@@ -25,6 +27,7 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Palette.WindowBackground);
         _tileRenderer.Draw(map, camera, viewport);
+        _propRenderer.Draw(decorations, camera, viewport);
         _playerRenderer.Draw(player.Column, player.Row, camera, viewport);
         Raylib.EndDrawing();
     }
