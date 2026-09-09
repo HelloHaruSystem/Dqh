@@ -12,6 +12,12 @@ internal static class MapLoader
         var directory = Path.Combine(AppContext.BaseDirectory, "Assets", "Maps");
         var map = LoadTileMap(Path.Combine(directory, $"{mapName}.csv"));
         var entities = LoadEntities(Path.Combine(directory, $"{mapName}.json"));
+
+        foreach (var decoration in entities.Decorations)
+        {
+            map.Block(decoration.Column, decoration.Row);
+        }
+
         return (map, entities);
     }
 

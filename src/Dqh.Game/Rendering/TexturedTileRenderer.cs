@@ -20,15 +20,15 @@ internal sealed class TexturedTileRenderer : ITileRenderer, IDisposable
         }
     }
 
-    public void Draw(TileMap map, Viewport viewport)
+    public void Draw(TileMap map, Camera camera, Viewport viewport)
     {
-        for (var row = 0; row < map.Rows; row++)
+        for (var screenRow = 0; screenRow < camera.VisibleRows; screenRow++)
         {
-            for (var col = 0; col < map.Columns; col++)
+            for (var screenColumn = 0; screenColumn < camera.VisibleColumns; screenColumn++)
             {
-                var texture = _textures[map.GetTile(col, row)];
+                var texture = _textures[map.GetTile(camera.StartColumn + screenColumn, camera.StartRow + screenRow)];
                 var source = new Rectangle(0, 0, texture.Width, texture.Height);
-                var destination = new Rectangle(viewport.PixelX(col), viewport.PixelY(row), viewport.TileSizePixels, viewport.TileSizePixels);
+                var destination = new Rectangle(viewport.PixelX(screenColumn), viewport.PixelY(screenRow), viewport.TileSizePixels, viewport.TileSizePixels);
                 Raylib.DrawTexturePro(texture, source, destination, Vector2.Zero, 0f, Color.White);
             }
         }

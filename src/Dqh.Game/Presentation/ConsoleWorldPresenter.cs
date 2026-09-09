@@ -7,8 +7,10 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 {
     private const char PlayerSymbol = '@';
 
-    public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
+    public void Present(TileMap map, IReadOnlyList<DecorationData> decorations, PlayerMarker player, float deltaSeconds)
     {
+        var decorationSymbols = decorations.ToDictionary(d => (d.Column, d.Row), d => SymbolFor(d.Id));
+
         for (var row = 0; row < map.Rows; row++)
         {
             var line = new char[map.Columns];
@@ -16,7 +18,9 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
             {
                 line[col] = col == player.Column && row == player.Row
                     ? PlayerSymbol
-                    : SymbolFor(map.GetTile(col, row));
+                    : decorationSymbols.TryGetValue((col, row), out var decorationSymbol)
+                        ? decorationSymbol
+                        : SymbolFor(map.GetTile(col, row));
             }
 
             Console.WriteLine(new string(line));
@@ -43,5 +47,11 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
         TileType.BedFoot => 'f',
         TileType.Table => 'T',
         _ => '?',
+    };
+
+    private static char SymbolFor(string decorationId) => decorationId switch
+    {
+        "sign" => 'S',
+        _ => '!',
     };
 }

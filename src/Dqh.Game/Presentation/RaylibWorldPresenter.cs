@@ -1,4 +1,5 @@
 using Dqh.Game.Rendering;
+using Dqh.Game.Settings;
 using Dqh.Game.World;
 using Raylib_cs;
 
@@ -9,21 +10,25 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
 {
     private readonly ITileRenderer _tileRenderer;
     private readonly IActorRenderer _playerRenderer;
+    private readonly PropRenderer _propRenderer;
 
-    public RaylibWorldPresenter(ITileRenderer tileRenderer, IActorRenderer playerRenderer)
+    public RaylibWorldPresenter(ITileRenderer tileRenderer, IActorRenderer playerRenderer, PropRenderer propRenderer)
     {
         _tileRenderer = tileRenderer;
         _playerRenderer = playerRenderer;
+        _propRenderer = propRenderer;
     }
 
-    public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
+    public void Present(TileMap map, IReadOnlyList<DecorationData> decorations, PlayerMarker player, float deltaSeconds)
     {
-        var viewport = Viewport.Fit(map.Columns, map.Rows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+        var camera = Camera.Follow(map, player.Column, player.Row, GridSettings.CameraColumns, GridSettings.CameraRows);
+        var viewport = Viewport.Fit(camera.VisibleColumns, camera.VisibleRows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
 
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Palette.WindowBackground);
-        _tileRenderer.Draw(map, viewport);
-        _playerRenderer.Draw(player.Column, player.Row, viewport);
+        _tileRenderer.Draw(map, camera, viewport);
+        _propRenderer.Draw(decorations, camera, viewport);
+        _playerRenderer.Draw(player.Column, player.Row, camera, viewport);
         Raylib.EndDrawing();
     }
 }

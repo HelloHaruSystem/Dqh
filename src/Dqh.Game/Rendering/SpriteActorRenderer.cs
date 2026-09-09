@@ -22,9 +22,11 @@ internal sealed class SpriteActorRenderer : IActorRenderer, IDisposable
         _frame = new Rectangle(0, 0, _texture.Width / frameColumns, _texture.Height / frameRows);
     }
 
-    public void Draw(int column, int row, Viewport viewport)
+    public void Draw(int column, int row, Camera camera, Viewport viewport)
     {
-        var destination = new Rectangle(viewport.PixelX(column), viewport.PixelY(row), viewport.TileSizePixels, viewport.TileSizePixels);
+        var screenColumn = column - camera.StartColumn;
+        var screenRow = row - camera.StartRow;
+        var destination = new Rectangle(viewport.PixelX(screenColumn), viewport.PixelY(screenRow), viewport.TileSizePixels, viewport.TileSizePixels);
         Raylib.DrawTexturePro(_texture, _frame, destination, Vector2.Zero, 0f, Color.White);
     }
 

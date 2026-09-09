@@ -17,23 +17,23 @@ var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgno
 
 if (headless)
 {
-    RunHeadless(map, player);
+    RunHeadless(map, entities.Decorations, player);
 }
 else
 {
-    RunWindowed(map, player);
+    RunWindowed(map, entities.Decorations, player);
 }
 
-static void RunHeadless(TileMap map, PlayerMarker player)
+static void RunHeadless(TileMap map, List<DecorationData> decorations, PlayerMarker player)
 {
     IInputSource input = new ConsoleInputSource();
     IWorldPresenter presenter = new ConsoleWorldPresenter();
     IClock clock = new HeadlessClock();
 
-    GameLoop.Run(map, player, input, presenter, clock);
+    GameLoop.Run(map, decorations, player, input, presenter, clock);
 }
 
-static void RunWindowed(TileMap map, PlayerMarker player)
+static void RunWindowed(TileMap map, List<DecorationData> decorations, PlayerMarker player)
 {
     Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
     Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
@@ -43,16 +43,18 @@ static void RunWindowed(TileMap map, PlayerMarker player)
     // Texture loading needs the window/GL context to already exist, so these
     // are constructed here, not before InitWindow.
     var tileRenderer = new TexturedTileRenderer();
+    var propRenderer = new PropRenderer();
     var heroAssetPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Characters", "hero.png");
     var playerRenderer = new SpriteActorRenderer(heroAssetPath, frameColumns: 2, frameRows: 3);
 
     IInputSource input = new RaylibInputSource();
-    IWorldPresenter presenter = new RaylibWorldPresenter(tileRenderer, playerRenderer);
+    IWorldPresenter presenter = new RaylibWorldPresenter(tileRenderer, playerRenderer, propRenderer);
     IClock clock = new RaylibClock();
 
-    GameLoop.Run(map, player, input, presenter, clock);
+    GameLoop.Run(map, decorations, player, input, presenter, clock);
 
     tileRenderer.Dispose();
+    propRenderer.Dispose();
     playerRenderer.Dispose();
     Raylib.CloseWindow();
 }
