@@ -1,0 +1,10 @@
+{
+  "playerSpawn": { "column": 5, "row": 8 },
+  "npcs": [
+    { "id": "innkeeper", "column": 2, "row": 5 }
+  ],
+  "portals": [
+    { "column": 5, "row": 9, "targetMap": "overworld", "targetColumn": 9, "targetRow": 20 }
+  ],
+  "decorations": []
+}
