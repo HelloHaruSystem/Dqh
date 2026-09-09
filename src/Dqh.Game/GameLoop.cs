@@ -12,14 +12,14 @@ namespace Dqh.Game;
 /// </summary>
 internal static class GameLoop
 {
-    public static void Run(TileMap map, IReadOnlyList<DecorationData> decorations, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
+    public static void Run(TileMap map, IReadOnlyList<DecorationData> decorations, IReadOnlyList<NpcData> npcs, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
     {
-        presenter.Present(map, decorations, player, clock.DeltaSeconds);
+        presenter.Present(map, decorations, npcs, player, clock.DeltaSeconds);
 
         while (!input.IsQuitRequested)
         {
             Update(player, input, clock.DeltaSeconds);
-            presenter.Present(map, decorations, player, clock.DeltaSeconds);
+            presenter.Present(map, decorations, npcs, player, clock.DeltaSeconds);
         }
     }
 
