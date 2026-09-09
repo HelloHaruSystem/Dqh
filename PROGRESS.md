@@ -131,6 +131,22 @@ Done:
   Deleted `docs/domain-model.drawio`; `docs/domain-model.md`'s Mermaid diagram is
   now the sole UML deliverable. Also trimmed the surrounding prose in that file
   down to short bullets per request.
+- Decoupled `Dqh.Game` from Raylib so a headless mode is possible (also makes the
+  game loop scriptable/testable without a window): `Input/IInputSource` →
+  `RaylibInputSource` (keyboard) / `ConsoleInputSource` (reads stdin one line at a
+  time, each line parsed via `MoveScript` into a move queue; blank line/EOF/"q"/
+  "quit" requests quit) + `MoveScript` (WASD-string parser); `Presentation/
+  IWorldPresenter` → `RaylibWorldPresenter` / `ConsoleWorldPresenter` (ASCII grid
+  dump); `GameLoop.Run` is the shared, Raylib-agnostic tick loop; `Program.cs` is
+  now just the composition root picking `--headless` vs. windowed mode. First cut
+  of headless mode took its whole script as one CLI argument (`ScriptedInputSource`)
+  — not actually a loop, just a one-shot batch. Replaced with the real stdin loop
+  above per feedback. Verified: piping moves line-by-line traces correctly and
+  quits on `q`; EOF alone (no explicit quit) also terminates cleanly; windowed mode
+  still opens/inits fine.
+  Deliberately did **not** put `TileMap`/`PlayerMarker` behind interfaces — they're
+  game state, not swappable policy, so an interface there would've been
+  abstraction with no second implementation in sight.
 
 Next session:
 1. `Encounter`, `IParty`/`Party` (roster as `List<Adventurer>` aggregation, encounter
