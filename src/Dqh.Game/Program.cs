@@ -9,10 +9,7 @@ using Raylib_cs;
 
 // Composition root: the only place that decides which concrete IInputSource/
 // IWorldPresenter/IClock to use. GameLoop itself never knows Raylib exists,
-// which is what makes headless mode possible: `dotnet run -- --headless` runs
-// the exact same tick loop with no window, reading moves from stdin one line
-// at a time instead of the keyboard, and dumping each frame as ASCII to the
-// console instead of drawing textures.
+// which is what makes headless mode possible.
 var (map, entities) = MapLoader.Load("overworld");
 var player = new PlayerMarker(map, entities.PlayerSpawn.Column, entities.PlayerSpawn.Row);
 
@@ -20,13 +17,23 @@ var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgno
 
 if (headless)
 {
+    RunHeadless(map, player);
+}
+else
+{
+    RunWindowed(map, player);
+}
+
+static void RunHeadless(TileMap map, PlayerMarker player)
+{
     IInputSource input = new ConsoleInputSource();
     IWorldPresenter presenter = new ConsoleWorldPresenter();
     IClock clock = new HeadlessClock();
 
     GameLoop.Run(map, player, input, presenter, clock);
 }
-else
+
+static void RunWindowed(TileMap map, PlayerMarker player)
 {
     Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
     Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");

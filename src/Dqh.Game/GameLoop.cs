@@ -18,12 +18,16 @@ internal static class GameLoop
 
         while (!input.IsQuitRequested)
         {
-            if (input.TryGetMove(out var columnDelta, out var rowDelta))
-            {
-                player.Move(columnDelta, rowDelta);
-            }
-
+            Update(player, input);
             presenter.Present(map, player, clock.DeltaSeconds);
+        }
+    }
+
+    private static void Update(PlayerMarker player, IInputSource input)
+    {
+        if (input.TryGetMove(out var columnDelta, out var rowDelta))
+        {
+            player.Move(columnDelta, rowDelta);
         }
     }
 }
