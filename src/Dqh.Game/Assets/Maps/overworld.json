@@ -1,0 +1,12 @@
+{
+  "playerSpawn": { "column": 9, "row": 20 },
+  "npcs": [
+    { "id": "dockWorker", "column": 35, "row": 13 }
+  ],
+  "portals": [
+    { "column": 9, "row": 19, "targetMap": "inn", "targetColumn": 5, "targetRow": 9 }
+  ],
+  "decorations": [
+    { "id": "sign", "column": 7, "row": 19 }
+  ]
+}
