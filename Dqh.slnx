@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dqh.Domain/Dqh.Domain.csproj" />
+  </Folder>
+</Solution>
