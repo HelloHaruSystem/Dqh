@@ -5,6 +5,7 @@ internal interface IInputSource
 {
     bool IsQuitRequested { get; }
 
+    /// <param name="deltaSeconds">Time elapsed since the last tick — needed to pace key-repeat while a key is held.</param>
     /// <returns>true if a move was produced this tick.</returns>
-    bool TryGetMove(out int columnDelta, out int rowDelta);
+    bool TryGetMove(float deltaSeconds, out int columnDelta, out int rowDelta);
 }
