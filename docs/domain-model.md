@@ -1,25 +1,27 @@
 # Domain model
 
-This is the design produced **before** writing the domain code, per the assignment's
-UML requirement. It is a living document — update it whenever the design changes, and
-keep the final version in sync with the shipped code.
-
-The authoritative, editable diagram is [`domain-model.drawio`](./domain-model.drawio)
-(open it at [diagrams.net](https://app.diagrams.net) / the draw.io desktop app, or edit
-the XML directly). The Mermaid rendering below is a read-only preview of the same
-design for quick viewing in GitHub/editors that don't have draw.io installed.
-
-## Preview
+The combat core as built in `src/Dqh.Domain` (kernekrav a/b). `Encounter`/`Party`/
+strategy/exceptions/etc. (kernekrav c–h) aren't built yet — see
+[`../PROGRESS.md`](../PROGRESS.md) for what's next.
 
 ```mermaid
 classDiagram
     class ICombatant {
         <<interface>>
         +string Name
-        +int CurrentHitPoints
         +int MaxHitPoints
+        +int CurrentHitPoints
         +bool IsDefeated
         +TakeDamage(amount) void
+        +Heal(amount) void
+    }
+    class HitPointTrack {
+        <<internal>>
+        +int MaxHitPoints
+        +int Current
+        +bool IsDefeated
+        +TakeDamage(amount) void
+        +Heal(amount) void
     }
 
     class Adventurer {
@@ -30,131 +32,105 @@ classDiagram
         +RestoreMana(amount) void
         +UseSignatureMove(target)* string
     }
-    ICombatant <|.. Adventurer
+    Adventurer ..|> ICombatant
+    Adventurer *-- HitPointTrack : hit points
+    Adventurer <|-- Hero
     Adventurer <|-- Warrior
     Adventurer <|-- Mage
-    Adventurer <|-- Healer
+    Adventurer <|-- Priest
     Adventurer <|-- Ranger
 
-    class Monster {
-        <<abstract>>
-        +PerformAttack(target)* string
-    }
-    ICombatant <|.. Monster
-    Monster <|-- Slime
-    Monster <|-- Goblin
-    Monster <|-- Dragon
-
-    class ISpellcaster { <<interface>> +CastSpell(target) string }
-    class IHealer { <<interface>> +Heal(target) string }
-    class IPhysicalAttacker { <<interface>> +PerformMeleeAttack(target) string }
+    class IAttacker { <<interface>> +PerformAttack(target) string }
+    class ISpellcaster { <<interface>> +KnownSpells +Cast(spell, target) string }
+    class IHealer { <<interface>> +KnownHealingSpells +Heal(spell, target) string }
     class IDefender { <<interface>> +Guard() string }
     class IFleeable { <<interface>> +AttemptFlee() bool }
-    ISpellcaster <|.. Mage
-    IHealer <|.. Healer
-    IPhysicalAttacker <|.. Warrior
-    IPhysicalAttacker <|.. Goblin
-    IDefender <|.. Warrior
-    IFleeable <|.. Ranger
 
-    class Severity { <<enumeration>> Low Medium High }
-    class Encounter {
-        +string Description
-        +string Location
-        +Severity Severity
-        +bool IsResolved
-        +Resolve() void
-    }
-    Encounter --> Severity
-    Encounter --> Monster : features
+    Hero ..|> IAttacker
+    Warrior ..|> IAttacker
+    Warrior ..|> IDefender
+    Mage ..|> ISpellcaster
+    Priest ..|> IHealer
+    Ranger ..|> IAttacker
+    Ranger ..|> IFleeable
 
-    class IChampionSelectionStrategy { <<interface>> +SelectChampion(encounter, adventurers) Adventurer }
-    class FirstAvailableChampionStrategy
-    IChampionSelectionStrategy <|.. FirstAvailableChampionStrategy
-
-    class IParty {
+    class IMonster {
         <<interface>>
-        +Register(adventurer) void
-        +RespondTo(encounter) Adventurer
-        +ResolveEncounter(encounter, onResolved) void
+        +MonsterKind Kind
+        +int AttackPower
+        +int DefensePower
+        +IsWeakTo(element) bool
     }
-    class Party
-    IParty <|.. Party
-    Party o-- Adventurer : roster
-    Party *-- Encounter : encounter log
-    Party ..> IChampionSelectionStrategy : uses
+    IMonster --|> ICombatant
 
-    class AdventurerUnavailableException
-    class NoSuitableAdventurerFoundException
-    class InsufficientManaException
+    class MonsterKind { <<enumeration>> Slime=1 Dracky=2 Ghost=3 }
+    class MonsterDefinition {
+        +MonsterKind Kind
+        +string Name
+        +int MaxHitPoints
+        +int AttackPower
+        +int DefensePower
+        +ElementType AttackElement
+        +Weaknesses
+        +string AttackDescriptionTemplate
+    }
+    class MonsterBestiary { <<internal, static>> +Get(kind) MonsterDefinition }
+    class Monster { +Create(kind)$ Monster +PerformAttack(target) string +IsWeakTo(element) bool }
 
-    class DomainToolbox { <<static>> +FindFirst~T~(items, predicate) T }
+    Monster ..|> IMonster
+    Monster ..|> IAttacker
+    Monster *-- HitPointTrack : hit points
+    Monster o-- MonsterDefinition : stats
+    Monster ..> MonsterBestiary : Create() looks up
+    MonsterBestiary *-- MonsterDefinition : catalog
+    MonsterBestiary ..> MonsterKind : keyed by
 
-    class IItem { <<interface>> +string Name +Describe() string }
-    class IUsable { <<interface>> +Use(target) void }
-    class IEquippable { <<interface>> +EquipmentSlot Slot }
-    IItem <|-- IUsable
-    IItem <|-- IEquippable
-    IUsable <|.. HealingPotion
-    IEquippable <|.. Sword
+    class ElementType { <<enumeration>> Physical=1 Fire=2 Ice=3 Wind=4 Explosion=5 }
+    class ISpell { <<interface>> +string Name +int ManaCost +Apply(caster, target) string }
+    class DamageSpell { +ElementType Element +Apply(caster, target) string }
+    class HealingSpell { +Apply(caster, target) string }
+    class SpellId { <<enumeration>> Ember=1 Inferno=2 Mend=3 GreaterMend=4 }
+    class SpellBook { <<internal, static>> +GetDamageSpell(id) DamageSpell +GetHealingSpell(id) HealingSpell }
 
-    class IEncounterGenerator { <<interface>> +Generate(location) Encounter }
-    class IBattleResolver { <<interface>> +Resolve(party, encounter) BattleOutcome }
-    class BattleOutcome { <<enumeration>> Victory Fled Defeat }
-    IBattleResolver --> BattleOutcome
+    DamageSpell ..|> ISpell
+    HealingSpell ..|> ISpell
+    DamageSpell ..> IMonster : checks weakness
+    SpellBook *-- DamageSpell : catalog
+    SpellBook *-- HealingSpell : catalog
+    SpellBook ..> SpellId : keyed by
+    Mage o-- DamageSpell : known spells
+    Mage ..> SpellBook : looks up
+    Priest o-- HealingSpell : known spells
+    Priest ..> SpellBook : looks up
 ```
 
-## Reskin note
+**Reskin:** the brief's superhero dispatch case, renamed — `Hero`→`Adventurer`,
+`Incident`→`Encounter` (not built yet), `DispatchCenter`→`Party` (not built yet).
 
-This started life as the assignment's "superhero dispatch center" brief. The case is
-reskinned as an old-school Dragon-Quest-style game (party exploring an overworld,
-random monster encounters) while keeping the same graded requirements underneath:
-`Hero` → `Adventurer`, `Incident` → `Encounter`, `DispatchCenter` → `Party`,
-`IDispatchStrategy` → `IChampionSelectionStrategy`.
+## Why it's shaped this way
 
-## Design rationale
+- **`ICombatant` interface, no shared base class.** `Adventurer` and `Monster` only
+  share HP bookkeeping (composed via `HitPointTrack`, not inherited) — everything
+  else diverges. Shared *capability*, not shared *taxonomy*: a Duck and an Airplane
+  both `CanFly` without a common `Flyer` base.
+- **Monsters are one data-driven class, not a subclass per monster.**
+  `MonsterKind` → `MonsterDefinition` → `MonsterBestiary` → single `Monster` class.
+  Same pattern for spells (`ISpell` + `DamageSpell`/`HealingSpell`, no abstract
+  `Spell` base) via `SpellId` → `SpellBook`.
+- **Aggregation vs. composition, applied literally.** Catalogs (`MonsterBestiary`,
+  `SpellBook`) *compose* their entries — they own them. `Monster`/`Mage`/`Priest`
+  only *aggregate* a shared entry looked up from a catalog — they don't own it
+  exclusively. `HitPointTrack` is genuinely composed (private, dies with its owner).
+- **Ability interfaces cut across the hierarchy.** `IAttacker` is implemented by
+  three `Adventurer` subclasses *and* the unrelated `Monster` — capability, not
+  position in a type tree. `ISpellcaster`/`IHealer` are typed to their specific
+  spell class, so the compiler blocks casting a heal spell through the attack path.
+- **Elemental weaknesses are mechanical, not flavor.** `ElementType` mirrors DQ's
+  spell families (Fire/Ice/Wind/Explosion + Physical). `DamageSpell.Apply` doubles
+  damage when the target `IMonster` is weak to its element.
+- **Access modifiers, restrictive by default.** Leaf classes `sealed`; internal
+  helpers (`HitPointTrack`, `MonsterBestiary`, `SpellBook`) `internal`; mutable
+  state is a public getter behind a `private` setter, changed only via validated
+  methods. Enums use explicit 1-based values so reordering can't renumber them.
 
-**`ICombatant` as the shared contract.** Both `Adventurer` and `Monster` implement
-it so any battle-resolution code can operate on "a thing that can fight" without
-caring which side of the encounter it belongs to. This is why it's an interface and
-not a shared base class: adventurers and monsters have nothing in common
-*structurally* (an adventurer has mana and a signature move; a monster has an attack
-pattern) — they only share a *capability*, which is exactly what an interface is for.
-
-**Ability interfaces independent of the class hierarchy.** `ISpellcaster`,
-`IHealer`, `IPhysicalAttacker`, `IDefender`, `IFleeable` each represent one battle
-command a DQ-style game supports. They're deliberately not baked into `Adventurer`
-itself, because not every adventurer (or monster — see `Goblin` implementing
-`IPhysicalAttacker`) has every ability, and which abilities exist should be able to
-grow without touching the `Adventurer`/`Monster` base classes.
-
-**Aggregation vs. composition on `Party`.** The roster (`List<Adventurer>`) is an
-*aggregation* — an adventurer can be registered, benched, or removed without the
-`Party` object owning its lifecycle; the adventurer object is meaningful on its own.
-The encounter log (`List<Encounter>`) is a *composition* — an `Encounter` only
-exists as an entry in some party's history; nothing else in the domain creates or
-holds one independently, and it has no meaning detached from the log it belongs to.
-
-**Why most consumable types are interfaces, not concrete classes.** Per the stated
-project preference, code that *uses* a capability (e.g. resolving a battle, spending
-an item) should depend on the interface (`ICombatant`, `IUsable`, `IChampionSelectionStrategy`,
-`IParty`, `IBattleResolver`, `IEncounterGenerator`), never on a concrete type like
-`Party` or `FirstAvailableChampionStrategy` directly. This is what makes
-`IChampionSelectionStrategy` swappable (kernekrav h / dependency inversion) without
-touching `Party`, and what will let `IBattleResolver` grow from a trivial
-auto-resolver into a full interactive battle screen later without changing anything
-that depends on the interface.
-
-**Access modifiers.** Default to the most restrictive option that still works:
-leaf classes (`Warrior`, `Slime`, `FirstAvailableChampionStrategy`, exception types,
-…) are `sealed` since nothing is designed to derive further from them. Mutating
-state (`Adventurer.Mana`, `IsKnockedOut`/`IsDefeated`, `Encounter.IsResolved`) is
-exposed as a public getter with a `private` (or `internal`, where the owning
-manager class needs to set it) setter — encapsulation isn't just "make fields
-private", it's "only the code that's supposed to change this state can change it".
-Widened only when an actual consumer needs it.
-
-## Status
-
-Implemented so far: see [`../PROGRESS.md`](../PROGRESS.md) for the up-to-date
-checklist — this file only tracks the *design*, not build status.
+See [`../PROGRESS.md`](../PROGRESS.md) for build status.
