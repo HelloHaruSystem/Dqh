@@ -79,7 +79,78 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - All enums use explicit numeric values (1-based) rather than implicit ordinals.
 - `Combatants/` split into `Combatants/Adventurers/` and `Combatants/Monsters/`
   (namespaces matching folders) once the flat folder grew past ~10 files.
-- 25 xUnit tests in `tests/Dqh.Domain.Tests`, all passing.
+- **`Adventurer.FullyRestore()`** (heals HP and mana to max, safely — via the
+  existing `Heal`/`RestoreMana`, not `int.MaxValue`) and **`IParty`/`Party.Members`**
+  (read-only roster view) — added for the Inn's innkeeper NPC in `Dqh.Game`.
+- 27 xUnit tests in `tests/Dqh.Domain.Tests`, all passing.
+
+## What's actually built (`src/Dqh.Game`)
+
+- **Headless vs. windowed, one composition root.** `Program.cs` picks
+  `ConsoleInputSource`/`ConsoleWorldPresenter`/`HeadlessClock` or
+  `RaylibInputSource`/`RaylibWorldPresenter`/`RaylibClock` based on a
+  `--headless` flag; `GameLoop` (shared, no Raylib reference) only knows the
+  `IInputSource`/`IWorldPresenter`/`IClock` interfaces. Headless mode takes
+  moves as stdin lines (`w`/`a`/`s`/`d`, `q` to quit) and dumps the whole map as
+  ASCII every tick — deliberately unaffected by the camera, so it stays fully
+  scriptable/testable.
+- **`IClock`/delta time**: `RaylibClock.DeltaSeconds => Raylib.GetFrameTime()`,
+  `HeadlessClock.DeltaSeconds` is a nominal 1/60s tick — introduced specifically
+  so `GameLoop`/input timing logic never needs a Raylib reference.
+- **Key-repeat input**: tap = instant move (`IsKeyPressed`), hold = timed repeat
+  every `MoveRepeatIntervalSeconds` (0.15f) using accumulated delta time — plain
+  `IsKeyDown` fired every frame (far too fast); a single `IsKeyPressed` check
+  only fires once per press (can't hold a direction). Feels "a little fast" per
+  playtesting — flagged to retune once more of the game exists to judge pacing
+  against, not yet done.
+- **Real texture rendering**: `TexturedTileRenderer`/`SpriteActorRenderer` load
+  PNGs from `Assets/{Tiles,Characters}` (path resolved via
+  `AppContext.BaseDirectory`, robust regardless of working directory) — replaced
+  the earlier flat-color placeholder renderers entirely.
+- **Maps as data, Tiled-editor-style**: `MapLoader` reads a `{map}.csv` (tile
+  index grid) + `{map}.json` (`MapEntities`: player spawn, NPCs, portals,
+  decorations — position/id only, behavior resolved in code from the id) per
+  map name from `Assets/Maps`. `overworld` (40x28) and `inn` (11x10) both exist.
+- **Camera**: `Rendering/Camera.cs` — a `GridSettings.CameraColumns`x`CameraRows`
+  (13x9) window centered on the player, clamped to the map's bounds
+  (`Camera.Follow`). `ITileRenderer`/`IActorRenderer` both take the `Camera` and
+  draw only its visible slice, converting map-absolute to camera-relative
+  coordinates before pixel mapping. The overworld's mountain/river borders were
+  deliberately made *thick* (6 tiles) specifically so a full camera window's
+  depth never sees open terrain through to the other side — validated via
+  rendered preview crops before any code was written. Console/headless mode is
+  unaffected by the camera (always dumps the whole map). An unclamped
+  "black-void" variant for interior scenes (so the Inn's walls don't reveal a
+  clamped edge) is designed but **not yet built**.
+- **`TileType`/`TileTraits`**: 14 explicit tile values (terrain + interior
+  furniture — `Door`/`Floor`/`Wall`/`BarCounter`/`BedHead`/`BedFoot`/`Table`/etc.
+  are baked into the CSV like terrain, since they're solid tile-grid objects).
+  `TileTraits.IsWalkable(this TileType)` (extension-method syntax, by explicit
+  preference) is the single source of truth for which tiles block movement.
+- **Decorations block movement via `TileMap`, not a parallel check.**
+  `TileMap` now owns a small `_blockedPositions` set alongside its terrain grid:
+  `IsWalkable(column, row)` combines `GetTile(...).IsWalkable()` with "not
+  occupied", and `Block(column, row)` marks a cell solid regardless of terrain.
+  `MapLoader` calls `Block` for every loaded decoration. `PlayerMarker.Move`
+  changed from `_map.GetTile(...).IsWalkable()` to `_map.IsWalkable(...)` — one
+  line, no new logic in `PlayerMarker` itself. This was a deliberate correction:
+  the first attempt hand-rolled a decoration-scanning loop directly inside
+  `PlayerMarker.Move`, which duplicated the walkability concept that
+  `TileTraits` already owns instead of extending it.
+- **Decoration rendering**: `PropRenderer` loads `Assets/Props/{id}.png` per
+  decoration id (lazily, cached), draws each one culled to the camera window.
+  Kept as a JSON entity layer (not baked into the tile CSV like furniture)
+  because it's positioned/rendered independently of terrain — the deliberate
+  choice, when asked, was to extend `TileMap` to also block these positions
+  rather than convert decorations into another `TileType`.
+- Original pixel art (Python + Pillow, 16x16 logical canvas, 8x nearest-neighbor
+  upscale, no anti-aliasing) for all tiles, the hero (3-direction/2-frame sheet,
+  "Right" = "Left" flipped at draw time, not a baked frame), NPCs, monsters, and
+  the sign prop — reviewed via `Assets/temp/` renders before finalizing.
+- **Not yet wired**: `Scene`/`Portal`/`Npc`/`GameWorld` (map-to-map transitions,
+  bump-to-talk NPC interaction, the innkeeper actually healing a `Party`) —
+  designed in an earlier plan-mode session, predates the asset-first pivot, and
+  still needs to be built against what actually exists now.
 
 ## Designed but not yet built
 
@@ -87,7 +158,16 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - `IEncounterGenerator` (factory for random encounters on overworld tiles)
 - `IBattleResolver` (swappable battle resolution, using `Party.ChooseTarget` and
   `Monster.AttemptFlee`/`PerformAttack` to actually run a fight turn by turn)
+- `Scene`/`Portal`/`Npc`/`GameWorld` in `Dqh.Game` — map-to-map transitions
+  (walking through the Inn's door and back), bump-to-talk NPC interaction, the
+  innkeeper healing a constructed `Party` via `Adventurer.FullyRestore()`, the
+  dock worker's "no boats today" line. Assets/maps/camera/movement are all in
+  place for this now; it's purely the wiring left.
+- The black-void (unclamped) `Camera` variant for interior scenes
+- Retuning `MoveRepeatIntervalSeconds` (currently 0.15f, feels "a little fast")
+  now that the camera gives a real sense of on-screen scale
 - Wiring `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop
+  (stepping onto an `EncounterZone` tile should trigger a fight)
 - Written justification for kernekrav h (why loose coupling makes the targeting
   policy easy to change later) — a few sentences, per kernekrav i
 - Day-2 alternative-track choice (kernekrav's thread race-condition demo vs. one
@@ -139,10 +219,49 @@ framing (now written down in `CLAUDE.md` so it doesn't need relearning):
   into `TakeTurn`/`PerformTurnAction`, and gave every adventurer `IAttacker` too
   (matching the DQ menu: Attack always available, plus one class-specific option).
 
+### 2026-09-09 — Session 3 (`real_textures` → `camera` branches)
+
+Built the actual playable slice's foundations in `Dqh.Game`, working slowly in
+small independently-verified chunks (build + domain tests + headless smoke test
+after each). Also reworded several early commit messages via
+`git rebase -i --rebase-merges` (file-based `GIT_SEQUENCE_EDITOR`/`GIT_EDITOR`
+scripts — inline shell strings silently flattened the merge topology; writing
+them as real script files fixed it, verified via the previewed todo list and
+`git log --min-parents=2` still showing all merges).
+
+Sequence: generated all original pixel art (Pillow, reviewed via `Assets/temp/`
+before finalizing) → gave assets meaningful directory/file names → `MapLoader`
+(Tiled-style CSV+JSON) → `IClock`/delta-time plumbing → real texture rendering
+(`TexturedTileRenderer`/`SpriteActorRenderer`) → `Program.cs`/`GameLoop` cleanup
+(was bloated, now a clean composition root + Update/Draw loop) → fixed
+janky/tap-only movement (key-repeat via delta time) → camera (`Camera.Follow`,
+clamped 13x9 window) → decoration rendering (`PropRenderer`) → decorations
+blocking movement.
+
+Two corrections worth remembering:
+- The overworld's impassable border was first widened while keeping grass
+  right up to the mountain/river edge — didn't fix anything, since the player
+  can walk on grass and would still see past a thin border. The actual fix was
+  making the *impassable* mountain/river bands themselves 6 tiles thick, so a
+  full camera window's depth never sees through to open terrain.
+- When the inn sign (a decoration) turned out to be walkable, the first fix
+  hand-rolled a decoration-position scan inside `PlayerMarker.Move` — a second,
+  parallel walkability check next to the one `TileTraits.IsWalkable` already
+  owns. Corrected to extend `TileMap` itself (`IsWalkable`/`Block`) so
+  `PlayerMarker` keeps its one existing check, now covering both terrain and
+  occupancy. Considered (and rejected, by choice) converting the sign into a
+  `TileType` like `Table`/`Door` — decorations stay a separate JSON entity
+  layer since they're rendered independently of terrain.
+
 Next session:
-1. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
-   (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`).
-2. Wire `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop so
-   stepping into an encounter tile actually triggers a fight.
-3. Write the kernekrav h justification paragraph, pick the Day-2 alternative track.
-4. Keep `docs/domain-model.md` updated as each of the above lands.
+1. Build `Scene`/`Portal`/`Npc`/`GameWorld` — the Inn door transition,
+   bump-to-talk NPCs, innkeeper healing a real `Party`, dock worker's line.
+2. Build the black-void camera variant for interior scenes.
+3. Retune `MoveRepeatIntervalSeconds` once the camera's scale makes pacing
+   judgable.
+4. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
+   (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
+   then wire encounter/battle resolution into `Dqh.Game` so stepping onto an
+   `EncounterZone` tile triggers a fight.
+5. Write the kernekrav h justification paragraph, pick the Day-2 alternative track.
+6. Keep `docs/domain-model.md` updated as each of the above lands.

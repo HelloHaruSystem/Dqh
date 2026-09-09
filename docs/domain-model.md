@@ -31,6 +31,7 @@ classDiagram
         +CanAfford(manaCost) bool
         +SpendMana(amount) void
         +RestoreMana(amount) void
+        +FullyRestore() void
         +TakeTurn(target) string
         +PerformTurnAction(target)* string
     }
@@ -127,6 +128,7 @@ classDiagram
 
     class IParty {
         <<interface>>
+        +Members IReadOnlyList~Adventurer~
         +Register(adventurer) void
         +Report(encounter) void
         +ChooseTarget(attacker) Adventurer
@@ -135,6 +137,7 @@ classDiagram
         +FindFirstUnresolvedEncounter() Encounter
     }
     class Party {
+        +Members IReadOnlyList~Adventurer~
         +Register(adventurer) void
         +Report(encounter) void
         +ChooseTarget(attacker) Adventurer
@@ -195,6 +198,13 @@ classDiagram
   `Party`'s roster only *aggregate* — many share the same catalog entry, or exist
   independently of the party. `Party`'s encounter log and each combatant's
   `HitPointTrack` are genuinely composed (owned exclusively, die with their owner).
+- **`FullyRestore()` and `Members` exist for the Inn.** `Dqh.Game`'s innkeeper NPC
+  needs to heal HP and mana back to full for every registered adventurer — a real
+  DQ inn mechanic, not a domain-internal need. `FullyRestore()` delegates to the
+  existing `Heal`/`RestoreMana` (capped at max, no overflow risk from passing
+  `int.MaxValue`); `Members` is a read-only view added because the roster
+  previously only supported single-item predicate lookups, and "heal everyone"
+  needs to enumerate it.
 - **Access modifiers, restrictive by default.** Leaf classes `sealed`; internal
   helpers (`HitPointTrack`, `MonsterBestiary`, `SpellBook`) `internal`; mutable
   state is a public getter behind a `private` setter, changed only via validated
