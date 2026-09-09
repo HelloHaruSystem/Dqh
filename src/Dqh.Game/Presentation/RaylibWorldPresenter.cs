@@ -16,7 +16,7 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         _playerRenderer = playerRenderer;
     }
 
-    public void Present(TileMap map, PlayerMarker player)
+    public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
     {
         var viewport = Viewport.Fit(map.Columns, map.Rows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
 

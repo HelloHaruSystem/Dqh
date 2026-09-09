@@ -9,7 +9,7 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
     private const char GrassSymbol = '.';
     private const char EncounterZoneSymbol = '"';
 
-    public void Present(TileMap map, PlayerMarker player)
+    public void Present(TileMap map, PlayerMarker player, float deltaSeconds)
     {
         for (var row = 0; row < map.Rows; row++)
         {

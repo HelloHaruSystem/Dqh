@@ -1,19 +1,20 @@
 using Dqh.Game.Input;
 using Dqh.Game.Presentation;
+using Dqh.Game.Timing;
 using Dqh.Game.World;
 
 namespace Dqh.Game;
 
 /// <summary>
 /// The tick loop itself, independent of Raylib. Identical for the windowed and
-/// headless modes — only the <see cref="IInputSource"/>/<see cref="IWorldPresenter"/>
-/// passed in differ.
+/// headless modes — only the <see cref="IInputSource"/>/<see cref="IWorldPresenter"/>/
+/// <see cref="IClock"/> passed in differ.
 /// </summary>
 internal static class GameLoop
 {
-    public static void Run(TileMap map, PlayerMarker player, IInputSource input, IWorldPresenter presenter)
+    public static void Run(TileMap map, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
     {
-        presenter.Present(map, player);
+        presenter.Present(map, player, clock.DeltaSeconds);
 
         while (!input.IsQuitRequested)
         {
@@ -22,7 +23,7 @@ internal static class GameLoop
                 player.Move(columnDelta, rowDelta);
             }
 
-            presenter.Present(map, player);
+            presenter.Present(map, player, clock.DeltaSeconds);
         }
     }
 }
