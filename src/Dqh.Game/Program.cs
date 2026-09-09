@@ -25,7 +25,9 @@ if (headless)
 }
 else
 {
+    Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
     Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
+    Raylib.SetWindowMinSize(GridSettings.MinWindowWidth, GridSettings.MinWindowHeight);
     Raylib.SetTargetFPS(GridSettings.TargetFps);
 
     IInputSource input = new RaylibInputSource();

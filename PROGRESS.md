@@ -147,6 +147,18 @@ Done:
   Deliberately did **not** put `TileMap`/`PlayerMarker` behind interfaces — they're
   game state, not swappable policy, so an interface there would've been
   abstraction with no second implementation in sight.
+- Made the Raylib window resizable (`dynamic_window_sizing` branch):
+  `Rendering/Viewport` (a `readonly record struct`) computes tile size + centering
+  offset each frame by fitting `GridSettings.Columns × Rows` into the *current*
+  `Raylib.GetScreenWidth()/GetScreenHeight()` — square tiles, letterboxed, not
+  stretched. `ITileRenderer`/`IActorRenderer.Draw` now take a `Viewport` instead of
+  reading the fixed `GridSettings.TileSizePixels` constant directly;
+  `RaylibWorldPresenter` recomputes it every `Present()` call.
+  `Raylib.SetConfigFlags(ConfigFlags.ResizableWindow)` + `SetWindowMinSize` (new
+  `GridSettings.MinTileSizePixels`/`MinWindow*` constants) enable and floor the
+  resize. `ConsoleWorldPresenter` (headless) is untouched — it has no window to
+  resize. Verified: build clean, windowed mode still inits, headless trace
+  unaffected, all 13 domain tests still pass.
 
 Next session:
 1. `Encounter`, `IParty`/`Party` (roster as `List<Adventurer>` aggregation, encounter

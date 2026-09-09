@@ -1,4 +1,3 @@
-using Dqh.Game.Settings;
 using Raylib_cs;
 
 namespace Dqh.Game.Rendering;
@@ -13,13 +12,13 @@ internal sealed class RectangleActorRenderer : IActorRenderer
         _color = color;
     }
 
-    public void Draw(int column, int row)
+    public void Draw(int column, int row, Viewport viewport)
     {
         Raylib.DrawRectangle(
-            column * GridSettings.TileSizePixels,
-            row * GridSettings.TileSizePixels,
-            GridSettings.TileSizePixels,
-            GridSettings.TileSizePixels,
+            viewport.PixelX(column),
+            viewport.PixelY(row),
+            viewport.TileSizePixels,
+            viewport.TileSizePixels,
             _color);
     }
 }
