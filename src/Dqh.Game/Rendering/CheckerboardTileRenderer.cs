@@ -1,4 +1,3 @@
-using Dqh.Game.Settings;
 using Dqh.Game.World;
 using Raylib_cs;
 
@@ -7,7 +6,7 @@ namespace Dqh.Game.Rendering;
 /// <summary>Placeholder <see cref="ITileRenderer"/>: flat-colored tiles, no bitmaps.</summary>
 internal sealed class CheckerboardTileRenderer : ITileRenderer
 {
-    public void Draw(TileMap map)
+    public void Draw(TileMap map, Viewport viewport)
     {
         for (var row = 0; row < map.Rows; row++)
         {
@@ -15,10 +14,10 @@ internal sealed class CheckerboardTileRenderer : ITileRenderer
             {
                 var color = ColorFor(map.GetTile(col, row), row, col);
                 Raylib.DrawRectangle(
-                    col * GridSettings.TileSizePixels,
-                    row * GridSettings.TileSizePixels,
-                    GridSettings.TileSizePixels,
-                    GridSettings.TileSizePixels,
+                    viewport.PixelX(col),
+                    viewport.PixelY(row),
+                    viewport.TileSizePixels,
+                    viewport.TileSizePixels,
                     color);
             }
         }

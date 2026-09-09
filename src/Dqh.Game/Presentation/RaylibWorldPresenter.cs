@@ -18,10 +18,12 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
 
     public void Present(TileMap map, PlayerMarker player)
     {
+        var viewport = Viewport.Fit(map.Columns, map.Rows, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+
         Raylib.BeginDrawing();
         Raylib.ClearBackground(Palette.WindowBackground);
-        _tileRenderer.Draw(map);
-        _playerRenderer.Draw(player.Column, player.Row);
+        _tileRenderer.Draw(map, viewport);
+        _playerRenderer.Draw(player.Column, player.Row, viewport);
         Raylib.EndDrawing();
     }
 }
