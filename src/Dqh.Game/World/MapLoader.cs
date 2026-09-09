@@ -18,6 +18,11 @@ internal static class MapLoader
             map.Block(decoration.Column, decoration.Row);
         }
 
+        foreach (var npc in entities.Npcs)
+        {
+            map.Block(npc.Column, npc.Row);
+        }
+
         return (map, entities);
     }
 

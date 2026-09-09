@@ -17,23 +17,23 @@ var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgno
 
 if (headless)
 {
-    RunHeadless(map, entities.Decorations, player);
+    RunHeadless(map, entities.Decorations, entities.Npcs, player);
 }
 else
 {
-    RunWindowed(map, entities.Decorations, player);
+    RunWindowed(map, entities.Decorations, entities.Npcs, player);
 }
 
-static void RunHeadless(TileMap map, List<DecorationData> decorations, PlayerMarker player)
+static void RunHeadless(TileMap map, List<DecorationData> decorations, List<NpcData> npcs, PlayerMarker player)
 {
     IInputSource input = new ConsoleInputSource();
     IWorldPresenter presenter = new ConsoleWorldPresenter();
     IClock clock = new HeadlessClock();
 
-    GameLoop.Run(map, decorations, player, input, presenter, clock);
+    GameLoop.Run(map, decorations, npcs, player, input, presenter, clock);
 }
 
-static void RunWindowed(TileMap map, List<DecorationData> decorations, PlayerMarker player)
+static void RunWindowed(TileMap map, List<DecorationData> decorations, List<NpcData> npcs, PlayerMarker player)
 {
     Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
     Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
@@ -44,17 +44,19 @@ static void RunWindowed(TileMap map, List<DecorationData> decorations, PlayerMar
     // are constructed here, not before InitWindow.
     var tileRenderer = new TexturedTileRenderer();
     var propRenderer = new PropRenderer();
+    var npcRenderer = new NpcRenderer();
     var heroAssetPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Characters", "hero.png");
     var playerRenderer = new SpriteActorRenderer(heroAssetPath, frameColumns: 2, frameRows: 3);
 
     IInputSource input = new RaylibInputSource();
-    IWorldPresenter presenter = new RaylibWorldPresenter(tileRenderer, playerRenderer, propRenderer);
+    IWorldPresenter presenter = new RaylibWorldPresenter(tileRenderer, playerRenderer, propRenderer, npcRenderer);
     IClock clock = new RaylibClock();
 
-    GameLoop.Run(map, decorations, player, input, presenter, clock);
+    GameLoop.Run(map, decorations, npcs, player, input, presenter, clock);
 
     tileRenderer.Dispose();
     propRenderer.Dispose();
+    npcRenderer.Dispose();
     playerRenderer.Dispose();
     Raylib.CloseWindow();
 }

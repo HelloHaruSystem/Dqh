@@ -98,11 +98,24 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   `HeadlessClock.DeltaSeconds` is a nominal 1/60s tick — introduced specifically
   so `GameLoop`/input timing logic never needs a Raylib reference.
 - **Key-repeat input**: tap = instant move (`IsKeyPressed`), hold = timed repeat
-  every `MoveRepeatIntervalSeconds` (0.15f) using accumulated delta time — plain
-  `IsKeyDown` fired every frame (far too fast); a single `IsKeyPressed` check
-  only fires once per press (can't hold a direction). Feels "a little fast" per
-  playtesting — flagged to retune once more of the game exists to judge pacing
-  against, not yet done.
+  every `MovementSettings.StepIntervalSeconds` using accumulated delta time —
+  plain `IsKeyDown` fired every frame (far too fast); a single `IsKeyPressed`
+  check only fires once per press (can't hold a direction). Originally 0.15f
+  and flagged as "feels a little fast" — retuned to 0.25f once the walk
+  animation (below) made the old pace read as an outright flicker.
+- **Hero walk-cycle animation**: `PlayerMarker` now tracks `Facing` (a
+  `Direction`: Down/Up/Left/Right) and `WalkFrame` (0/1), updated by `Move` —
+  facing changes even on a blocked move (bumping a wall turns you to face it
+  without animating a step), `WalkFrame` flips only on an actual step and
+  resets to standing after `MovementSettings.WalkAnimationIdleResetSeconds` of
+  no stepping (`PlayerMarker.Tick`, called every `GameLoop.Update`).
+  `SpriteActorRenderer` picks the sprite row from `Facing` (Down/Up/Left map to
+  rows 0/1/2 of `hero.png`; Right reuses row 2 mirrored via a negative-width
+  source `Rectangle` in `DrawTexturePro` — there's no separate Right row in the
+  sheet) and the column from `WalkFrame`. `MovementSettings` is the single
+  source for both the input-repeat interval and the animation's idle-reset
+  threshold (derived from it, `* 1.5`) specifically so they can't drift apart
+  and reintroduce the jitter/flicker problem above.
 - **Real texture rendering**: `TexturedTileRenderer`/`SpriteActorRenderer` load
   PNGs from `Assets/{Tiles,Characters}` (path resolved via
   `AppContext.BaseDirectory`, robust regardless of working directory) — replaced
@@ -145,12 +158,26 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   rather than convert decorations into another `TileType`.
 - Original pixel art (Python + Pillow, 16x16 logical canvas, 8x nearest-neighbor
   upscale, no anti-aliasing) for all tiles, the hero (3-direction/2-frame sheet,
-  "Right" = "Left" flipped at draw time, not a baked frame), NPCs, monsters, and
-  the sign prop — reviewed via `Assets/temp/` renders before finalizing.
-- **Not yet wired**: `Scene`/`Portal`/`Npc`/`GameWorld` (map-to-map transitions,
+  "Right" = "Left" flipped at draw time, not a baked frame — now actually wired
+  up, see the walk-cycle animation bullet above), NPCs, monsters, and the sign
+  prop — reviewed via `Assets/temp/` renders before finalizing.
+- **NPC rendering**: `NpcRenderer` mirrors `PropRenderer` exactly (per-id
+  texture cached from `Assets/Characters`, culled to camera) — same shape of
+  problem, kept as its own class rather than generalized together, matching
+  the existing precedent of separate single-purpose renderers
+  (`TexturedTileRenderer`/`PropRenderer`/`SpriteActorRenderer`) even though the
+  draw loop is textually similar; NPCs are static single-frame portraits (no
+  direction/walk sheet like the hero's), and are expected to diverge from
+  decorations once bump-to-talk/dialogue lands. `MapLoader.Load` now also
+  calls `TileMap.Block` for each NPC position (same one-liner already used for
+  decorations), so a rendered NPC is solid — the player can no longer walk
+  through it invisibly. `ConsoleWorldPresenter`'s ASCII dump got matching
+  symbols (`I` innkeeper, `W` dock worker) for headless parity.
+- **Not yet wired**: `Scene`/`Portal`/`GameWorld` (map-to-map transitions,
   bump-to-talk NPC interaction, the innkeeper actually healing a `Party`) —
   designed in an earlier plan-mode session, predates the asset-first pivot, and
-  still needs to be built against what actually exists now.
+  still needs to be built against what actually exists now. NPCs render and
+  block movement; they don't do anything yet when bumped into.
 
 ## Designed but not yet built
 
@@ -158,14 +185,12 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - `IEncounterGenerator` (factory for random encounters on overworld tiles)
 - `IBattleResolver` (swappable battle resolution, using `Party.ChooseTarget` and
   `Monster.AttemptFlee`/`PerformAttack` to actually run a fight turn by turn)
-- `Scene`/`Portal`/`Npc`/`GameWorld` in `Dqh.Game` — map-to-map transitions
-  (walking through the Inn's door and back), bump-to-talk NPC interaction, the
+- `Scene`/`Portal`/`GameWorld` in `Dqh.Game` — map-to-map transitions (walking
+  through the Inn's door and back), bump-to-talk NPC interaction, the
   innkeeper healing a constructed `Party` via `Adventurer.FullyRestore()`, the
-  dock worker's "no boats today" line. Assets/maps/camera/movement are all in
-  place for this now; it's purely the wiring left.
+  dock worker's "no boats today" line. Assets/maps/camera/movement/NPC
+  rendering are all in place for this now; it's purely the wiring left.
 - The black-void (unclamped) `Camera` variant for interior scenes
-- Retuning `MoveRepeatIntervalSeconds` (currently 0.15f, feels "a little fast")
-  now that the camera gives a real sense of on-screen scale
 - Wiring `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop
   (stepping onto an `EncounterZone` tile should trigger a fight)
 - Written justification for kernekrav h (why loose coupling makes the targeting
@@ -254,14 +279,51 @@ Two corrections worth remembering:
   layer since they're rendered independently of terrain.
 
 Next session:
-1. Build `Scene`/`Portal`/`Npc`/`GameWorld` — the Inn door transition,
-   bump-to-talk NPCs, innkeeper healing a real `Party`, dock worker's line.
+1. Build `Scene`/`Portal`/`GameWorld` — the Inn door transition, bump-to-talk
+   NPC interaction (NPCs render and block movement now, but do nothing yet
+   when bumped into), innkeeper healing a real `Party`, dock worker's line.
 2. Build the black-void camera variant for interior scenes.
-3. Retune `MoveRepeatIntervalSeconds` once the camera's scale makes pacing
-   judgable.
-4. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
+3. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
    (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
    then wire encounter/battle resolution into `Dqh.Game` so stepping onto an
    `EncounterZone` tile triggers a fight.
-5. Write the kernekrav h justification paragraph, pick the Day-2 alternative track.
-6. Keep `docs/domain-model.md` updated as each of the above lands.
+4. Write the kernekrav h justification paragraph, pick the Day-2 alternative track.
+5. Keep `docs/domain-model.md` updated as each of the above lands.
+
+### 2026-09-09 — Session 4
+
+Built the hero's walk-cycle animation: `PlayerMarker` gained `Facing`
+(`Direction`: Down/Up/Left/Right) and `WalkFrame` (0/1), `SpriteActorRenderer`
+picks the sprite row/column from those and mirrors the Left row for Right (no
+separate Right row in `hero.png`). First pass tied the walk-frame reset
+straight to the pre-existing `MoveRepeatIntervalSeconds` (0.15f) in
+`RaylibInputSource` via a second, independent constant in `PlayerMarker` —
+playtesting immediately called it "hurts to look at, doesn't seem smooth".
+Root cause: two uncoordinated magic numbers pacing the same underlying step
+cadence with barely any margin between them (0.15f vs. 0.2f), at a pace fast
+enough (~6.7 steps/sec) that position-pop + leg-flip together read as a
+strobe. Fixed by consolidating both into one `Settings/MovementSettings.cs`
+(`StepIntervalSeconds`, with the idle-reset threshold derived from it at
+`* 1.5` so they can't drift apart again) and slowing the shared interval to
+0.25f — closing the "retune `MoveRepeatIntervalSeconds`" item that had been on
+the backlog since session 3. Deliberately did *not* add tile-to-tile sliding
+or smooth camera scrolling to chase extra smoothness: original Dragon Quest
+movement is instant tile-snap too, so that would've been a much bigger change
+(`Camera`/`Viewport` would need fractional positions) in service of an
+un-DQ-authentic feel, not the actual bug.
+
+### 2026-09-09 — Session 5
+
+Rendered the NPCs (`innkeeper`, `dockWorker`) that were already sitting in the
+map JSON with no visual. `NpcRenderer` mirrors `PropRenderer`'s shape (per-id
+cached texture from `Assets/Characters`, culled to camera) — kept as its own
+class rather than unifying with `PropRenderer` despite the near-identical draw
+loop, since NPCs are expected to diverge once bump-to-talk/dialogue lands and
+the codebase already prefers several small single-purpose renderers over one
+generalized one. Plumbed `NpcData` through `GameLoop`/`IWorldPresenter`/both
+presenters/`Program.cs` the same way `DecorationData` already flows.
+`MapLoader.Load` now also calls the existing `TileMap.Block` for each NPC
+position (the same one-liner already used for decorations) — without it, a
+now-visible NPC would let the player walk straight through it. Bump-to-talk
+interaction itself stays out of scope, deferred to the `Scene`/`Portal`/
+`GameWorld` wiring next session.
