@@ -1,7 +1,8 @@
 using Dqh.Domain.Abilities;
+using Dqh.Domain.Combatants;
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Adventurers;
 
 /// <summary>Support caster with a small book of restorative spells; the signature move casts its strongest.</summary>
 public sealed class Priest : Adventurer, IHealer

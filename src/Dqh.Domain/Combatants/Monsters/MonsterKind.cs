@@ -1,4 +1,4 @@
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Monsters;
 
 /// <summary>
 /// Identifies a monster's stat template in <see cref="MonsterBestiary"/>. Kept to

@@ -1,6 +1,6 @@
 using Dqh.Domain.Magic;
 
-namespace Dqh.Domain.Combatants;
+namespace Dqh.Domain.Combatants.Monsters;
 
 /// <summary>
 /// Central catalog of monster stat templates, keyed by <see cref="MonsterKind"/>.

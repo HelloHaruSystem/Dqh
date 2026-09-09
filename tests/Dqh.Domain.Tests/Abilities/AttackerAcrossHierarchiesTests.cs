@@ -1,5 +1,6 @@
 using Dqh.Domain.Abilities;
-using Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants.Adventurers;
+using Dqh.Domain.Combatants.Monsters;
 
 namespace Dqh.Domain.Tests.Abilities;
 

@@ -1,4 +1,4 @@
-using Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants.Adventurers;
 
 namespace Dqh.Domain.Tests.Combatants;
 
