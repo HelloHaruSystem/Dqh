@@ -27,6 +27,7 @@ public sealed class Monster : IMonster, IAttacker, IFleeable
     public MonsterKind Kind => _definition.Kind;
     public int AttackPower => _definition.AttackPower;
     public int DefensePower => _definition.DefensePower;
+    public int Speed => _definition.Speed;
 
     public int MaxHitPoints => _hitPoints.MaxHitPoints;
     public int CurrentHitPoints => _hitPoints.Current;

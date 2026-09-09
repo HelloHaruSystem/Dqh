@@ -1,8 +1,9 @@
 # Domain model
 
-The domain as built in `src/Dqh.Domain` — combat core plus party/encounter
-management (kernekrav a–h). See [`../PROGRESS.md`](../PROGRESS.md) for what's next
-(items, encounter generation/battle resolution, wiring into `Dqh.Game`).
+The domain as built in `src/Dqh.Domain` — combat core, a full turn-based
+battle loop, plus party/encounter management (kernekrav a–h). See
+[`../PROGRESS.md`](../PROGRESS.md) for what's next (items, wiring the
+innkeeper's heal in `Dqh.Game`).
 
 ```mermaid
 classDiagram
@@ -12,6 +13,7 @@ classDiagram
         +int MaxHitPoints
         +int CurrentHitPoints
         +bool IsDefeated
+        +int Speed
         +TakeDamage(amount) void
         +Heal(amount) void
     }
@@ -28,10 +30,12 @@ classDiagram
         <<abstract>>
         -int _mana
         +int Mana
+        +bool IsGuarding
         +CanAfford(manaCost) bool
         +SpendMana(amount) void
         +RestoreMana(amount) void
         +FullyRestore() void
+        +ResetGuard() void
         +TakeTurn(target) string
         +PerformTurnAction(target)* string
     }
@@ -80,6 +84,7 @@ classDiagram
         +string AttackDescriptionTemplate
         +int AttackWeight
         +int FleeWeight
+        +int Speed
     }
     class MonsterBestiary { <<internal, static>> +Get(kind) MonsterDefinition }
     class Monster {
@@ -121,6 +126,32 @@ classDiagram
         +bool IsResolved
     }
     Encounter o-- IMonster : monster group
+
+    class IEncounterGenerator { <<interface>> +Generate() Encounter }
+    class RandomEncounterGenerator { +Generate() Encounter }
+    RandomEncounterGenerator ..|> IEncounterGenerator
+    RandomEncounterGenerator ..> Monster : Create()
+
+    class BattleCommand { <<abstract>> +Adventurer Actor }
+    class AttackCommand { +IMonster Target }
+    class CastCommand { +DamageSpell Spell +IMonster Target }
+    class HealCommand { +HealingSpell Spell +Adventurer Target }
+    class GuardCommand
+    class FleeCommand
+    BattleCommand <|-- AttackCommand
+    BattleCommand <|-- CastCommand
+    BattleCommand <|-- HealCommand
+    BattleCommand <|-- GuardCommand
+    BattleCommand <|-- FleeCommand
+
+    class BattleRoundResult { +Log +FledMonsters +bool PartyFled }
+    class IBattleResolver { <<interface>> +ResolveRound(party, monsters, commands) BattleRoundResult }
+    class StandardBattleResolver { +ResolveRound(party, monsters, commands) BattleRoundResult }
+    StandardBattleResolver ..|> IBattleResolver
+    StandardBattleResolver ..> BattleCommand : dispatches by type
+    StandardBattleResolver ..> BattleRoundResult : returns
+    StandardBattleResolver ..> IParty : ChooseTarget
+    StandardBattleResolver ..> IMonster : AttemptFlee / PerformAttack
 
     class ITargetSelectionStrategy { <<interface>> +SelectTarget(attacker, availableTargets) Adventurer }
     class RandomTargetStrategy { +SelectTarget(attacker, availableTargets) Adventurer }
@@ -186,6 +217,37 @@ classDiagram
   random, lowest-HP, ...) and belongs to the party's formation — `Party` takes an
   `ITargetSelectionStrategy` via its constructor (dependency inversion), first
   implementation `RandomTargetStrategy`.
+- **Speed decides turn order; Guard actually reduces damage.** Neither existed
+  until the battle loop needed them — a fixed party-then-monster order and a
+  flavor-only `Guard()` would've been the cheaper Domain change, but an
+  authentic DQ round interleaves fast and slow actors, and Defend is supposed
+  to matter. `ICombatant.Speed` sorts a round's actors descending (Ranger and
+  MetalSlime fastest, matching their DQ reputations); `Adventurer.IsGuarding`
+  (set by `Warrior.Guard()`, cleared by `ResetGuard()` at the start of the next
+  round) halves the next hit inside `Adventurer.TakeDamage` itself — no caller
+  needs to know guarding exists to still benefit from it.
+- **`IBattleResolver`/`StandardBattleResolver`: orchestration over old parts,
+  not new mechanics.** `ResolveRound` merges a round's `BattleCommand`s (one
+  per living party member) with every living monster into one Speed-ordered
+  list and executes each turn by dispatching to the exact ability interface a
+  `BattleCommand` needs (`AttackCommand`→`IAttacker`, `CastCommand`→
+  `ISpellcaster`, ...) — every action still returns the same flavor-text
+  string `PerformAttack`/`Cast`/`Heal`/`Guard` always did, just collected into
+  `BattleRoundResult.Log` instead of handed back one call at a time. A
+  monster's own turn still rolls `AttemptFlee()` against
+  `AttackWeight`/`FleeWeight` and, if it doesn't flee, still calls
+  `Party.ChooseTarget` then `PerformAttack` — nothing about *how* a monster
+  decides to act changed, only that something now actually calls it every
+  round. A fled monster is reported in `BattleRoundResult.FledMonsters`
+  rather than removed by the resolver itself, keeping it a stateless,
+  swappable service — the caller owns the encounter's active roster.
+- **`IEncounterGenerator` mirrors `ITargetSelectionStrategy`'s shape.**
+  Another small injected-strategy interface (kernekrav h already has its one
+  required example in `ITargetSelectionStrategy`; this is additive
+  consistency, not a second requirement) — `RandomEncounterGenerator` builds
+  a group of 1-3 monsters from the whole bestiary via the existing
+  `Monster.Create`, swappable for a different generation policy later without
+  touching whatever calls it.
 - **Exceptions are for caller mistakes, not expected game states.** A party wipe,
   running low on mana, or a defeated adventurer trying to act are normal outcomes
   of play — `ChooseTarget` returns `null`, `Cast`/`Heal` return a message, instead

@@ -9,8 +9,9 @@ public sealed class Hero : Adventurer, IAttacker
     private const int MaxHitPointsValue = 45;
     private const int StartingMana = 15;
     private const int AttackDamage = 8;
+    private const int SpeedValue = 10;
 
-    public Hero(string name) : base(name, MaxHitPointsValue, StartingMana)
+    public Hero(string name) : base(name, MaxHitPointsValue, StartingMana, SpeedValue)
     {
     }
 

@@ -16,17 +16,17 @@ internal static class NpcBehaviors
             return;
         }
 
-        world.QueueDialogueLines(NpcDialogue.LinesFor(npc.Id));
+        world.Conversation.QueueDialogueLines(NpcDialogue.LinesFor(npc.Id));
     }
 
     private static void Innkeeper(GameWorld world)
     {
-        world.QueueDialogueLines(["Welcome, traveler!"]);
-        world.QueueChoice(
+        world.Conversation.QueueDialogueLines(["Welcome, traveler!"]);
+        world.Conversation.QueueChoice(
             "Would you like to stay the night and rest?",
             yesLabel: "Yes",
             noLabel: "No",
             onYes: () => world.StartRelocation(InnBedsideColumn, InnBedsideRow),
-            onNo: () => world.QueueDialogueLines(["Safe travels, then."]));
+            onNo: () => world.Conversation.QueueDialogueLines(["Safe travels, then."]));
     }
 }

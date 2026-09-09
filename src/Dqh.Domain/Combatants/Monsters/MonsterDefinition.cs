@@ -18,10 +18,12 @@ public sealed class MonsterDefinition
     public string AttackDescriptionTemplate { get; }
     public int AttackWeight { get; }
     public int FleeWeight { get; }
+    public int Speed { get; }
 
     /// <param name="attackDescriptionTemplate">Flavor text with {0}=attacker name, {1}=target name.</param>
     /// <param name="attackWeight">Relative weight of attacking on a given turn, versus <paramref name="fleeWeight"/>.</param>
     /// <param name="fleeWeight">Relative weight of fleeing on a given turn, versus <paramref name="attackWeight"/>.</param>
+    /// <param name="speed">How early this monster acts in a battle round — higher goes first.</param>
     public MonsterDefinition(
         MonsterKind kind,
         string name,
@@ -32,7 +34,8 @@ public sealed class MonsterDefinition
         IEnumerable<ElementType> weaknesses,
         string attackDescriptionTemplate,
         int attackWeight,
-        int fleeWeight)
+        int fleeWeight,
+        int speed)
     {
         Kind = kind;
         Name = name;
@@ -44,5 +47,6 @@ public sealed class MonsterDefinition
         AttackDescriptionTemplate = attackDescriptionTemplate;
         AttackWeight = attackWeight;
         FleeWeight = fleeWeight;
+        Speed = speed;
     }
 }

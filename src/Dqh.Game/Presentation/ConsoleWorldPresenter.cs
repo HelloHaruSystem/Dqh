@@ -17,6 +17,12 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
             return;
         }
 
+        if (world.ActiveBattle is { } battle)
+        {
+            PresentBattle(battle);
+            return;
+        }
+
         var occupantSymbols = world.Decorations.ToDictionary(d => (d.Column, d.Row), d => SymbolFor(d.Id));
         foreach (var npc in world.Npcs)
         {
@@ -40,19 +46,50 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
 
         Console.WriteLine($"Player at ({player.Column}, {player.Row})");
 
-        if (world.ActiveChoice is { } choice)
+        if (world.Conversation.ActiveChoice is { } choice)
         {
             Console.WriteLine($"? {choice.Prompt}");
-            Console.WriteLine($"{(world.ChoiceYesSelected ? "> " : "  ")}{choice.YesLabel}");
-            Console.WriteLine($"{(!world.ChoiceYesSelected ? "> " : "  ")}{choice.NoLabel}");
+            Console.WriteLine($"{(world.Conversation.ChoiceYesSelected ? "> " : "  ")}{choice.YesLabel}");
+            Console.WriteLine($"{(!world.Conversation.ChoiceYesSelected ? "> " : "  ")}{choice.NoLabel}");
         }
-        else if (world.ActiveDialogueLine is { } activeLine)
+        else if (world.Conversation.ActiveDialogueLine is { } activeLine)
         {
             Console.WriteLine($"> {activeLine} [e to continue]");
         }
         else if (world.IsFacingInteractable(player))
         {
             Console.WriteLine("[facing something — e to chat]");
+        }
+
+        Console.WriteLine();
+    }
+
+    private static void PresentBattle(Battle battle)
+    {
+        Console.WriteLine("=== BATTLE ===");
+        foreach (var monster in battle.ActiveMonsters)
+        {
+            Console.WriteLine($"{monster.Name}: {monster.CurrentHitPoints}/{monster.MaxHitPoints} HP{(monster.IsDefeated ? " (defeated)" : "")}");
+        }
+
+        Console.WriteLine("---");
+        foreach (var member in battle.PartyMembers)
+        {
+            Console.WriteLine($"{member.Name}: {member.CurrentHitPoints}/{member.MaxHitPoints} HP, {member.Mana} MP{(member.IsDefeated ? " (defeated)" : "")}");
+        }
+
+        Console.WriteLine();
+
+        if (battle.IsShowingLog)
+        {
+            Console.WriteLine($"> {battle.LogLine} [e to continue]");
+        }
+        else if (battle.IsShowingMenu)
+        {
+            for (var i = 0; i < battle.MenuOptions.Count; i++)
+            {
+                Console.WriteLine($"{(i == battle.SelectedMenuIndex ? "> " : "  ")}{battle.MenuOptions[i]}");
+            }
         }
 
         Console.WriteLine();

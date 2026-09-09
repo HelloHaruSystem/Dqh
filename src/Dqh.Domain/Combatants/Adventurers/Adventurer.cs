@@ -14,7 +14,8 @@ public abstract class Adventurer : ICombatant
     /// <param name="name">Must not be blank.</param>
     /// <param name="maxHitPoints">Must be positive.</param>
     /// <param name="startingMana">Clamped into the valid 0-100 range.</param>
-    protected Adventurer(string name, int maxHitPoints, int startingMana)
+    /// <param name="speed">How early this adventurer acts in a battle round — higher goes first.</param>
+    protected Adventurer(string name, int maxHitPoints, int startingMana, int speed)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Adventurer must have a name.", nameof(name));
@@ -22,6 +23,7 @@ public abstract class Adventurer : ICombatant
         Name = name;
         _hitPoints = new HitPointTrack(maxHitPoints);
         Mana = startingMana;
+        Speed = speed;
     }
 
     public string Name { get; }
@@ -29,6 +31,10 @@ public abstract class Adventurer : ICombatant
     public int MaxHitPoints => _hitPoints.MaxHitPoints;
     public int CurrentHitPoints => _hitPoints.Current;
     public bool IsDefeated => _hitPoints.IsDefeated;
+    public int Speed { get; }
+
+    /// <summary>Whether this adventurer chose to guard this round — halves the next hit they take.</summary>
+    public bool IsGuarding { get; private set; }
 
     /// <summary>Current mana, always within [0, 100] regardless of what callers pass in.</summary>
     public int Mana
@@ -37,9 +43,15 @@ public abstract class Adventurer : ICombatant
         private set => _mana = Math.Clamp(value, MinMana, MaxMana);
     }
 
-    public void TakeDamage(int amount) => _hitPoints.TakeDamage(amount);
+    public void TakeDamage(int amount) => _hitPoints.TakeDamage(IsGuarding ? amount / 2 : amount);
 
     public void Heal(int amount) => _hitPoints.Heal(amount);
+
+    /// <summary>Marks this adventurer as guarding — halves the next hit they take, until <see cref="ResetGuard"/>.</summary>
+    protected void SetGuarding() => IsGuarding = true;
+
+    /// <summary>Clears the guarding state, e.g. at the start of a new battle round.</summary>
+    public void ResetGuard() => IsGuarding = false;
 
     public bool CanAfford(int manaCost) => manaCost <= Mana;
 

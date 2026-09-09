@@ -1,47 +1,40 @@
+using Dqh.Domain.Battles;
+using Dqh.Domain.Encounters;
+using Dqh.Domain.Party;
 using Dqh.Game.Settings;
 
 namespace Dqh.Game.World;
 
 /// <summary>
-/// The map currently loaded and active. Swapped out for another map's — or the
-/// player just relocated within the same one — behind a fade-to-black-and-back
-/// transition.
+/// The map currently loaded and active, plus the session-wide state that
+/// overlays it: the current map transition, the current conversation, and
+/// the party's ongoing battle, if any.
 /// </summary>
 internal sealed class GameWorld
 {
+    private readonly IEncounterGenerator _encounterGenerator;
+    private readonly IBattleResolver _battleResolver;
     private (TileMap Map, MapEntities Entities) _current;
-    private PendingTransition? _pendingTransition;
-    private float _transitionElapsed;
-    private bool _hasSwapped;
-    private readonly Queue<DialogueStep> _dialogueSteps = new();
 
     public TileMap Map => _current.Map;
     public IReadOnlyList<DecorationData> Decorations => _current.Entities.Decorations;
     public IReadOnlyList<NpcData> Npcs => _current.Entities.Npcs;
     public GridPosition PlayerSpawn => _current.Entities.PlayerSpawn;
 
-    /// <summary>0 outside a transition; ramps 0→1→0 across a crossing (1 = fully faded to black).</summary>
-    public float TransitionFade { get; private set; }
-
-    public bool IsTransitioning => _pendingTransition is not null;
-
-    /// <summary>The line currently on screen, or null when the current step isn't a plain line.</summary>
-    public string? ActiveDialogueLine => _dialogueSteps.Count > 0 && _dialogueSteps.Peek() is DialogueLine line ? line.Text : null;
-
-    /// <summary>The choice currently on screen, or null when the current step isn't a choice.</summary>
-    public DialogueChoice? ActiveChoice => _dialogueSteps.Count > 0 && _dialogueSteps.Peek() is DialogueChoice choice ? choice : null;
-
-    public bool IsTalking => _dialogueSteps.Count > 0;
-
-    /// <summary>Which option is highlighted while <see cref="ActiveChoice"/> is showing.</summary>
-    public bool ChoiceYesSelected { get; private set; } = true;
+    public Party Party { get; }
+    public MapTransition Transition { get; } = new();
+    public Conversation Conversation { get; } = new();
+    public Battle? ActiveBattle { get; private set; }
 
     /// <summary>True until the player dismisses the opening title screen.</summary>
     public bool IsShowingWelcome { get; private set; } = true;
 
-    public GameWorld(string startingMapName)
+    public GameWorld(string startingMapName, Party party, IEncounterGenerator encounterGenerator, IBattleResolver battleResolver)
     {
         _current = MapLoader.Load(startingMapName);
+        Party = party;
+        _encounterGenerator = encounterGenerator;
+        _battleResolver = battleResolver;
     }
 
     public void DismissWelcome() => IsShowingWelcome = false;
@@ -49,53 +42,53 @@ internal sealed class GameWorld
     /// <summary>If the player is standing on a portal, starts the fade-out that will lead into it.</summary>
     public void CheckPortal(PlayerMarker player)
     {
-        if (IsTransitioning) return;
+        if (Transition.IsActive) return;
 
         var portal = _current.Entities.Portals.FirstOrDefault(p => p.Column == player.Column && p.Row == player.Row);
         if (portal is null) return;
 
-        StartTransition(portal.TargetMap, portal.TargetColumn, portal.TargetRow);
+        Transition.Start(portal.TargetMap, portal.TargetColumn, portal.TargetRow);
     }
 
     /// <summary>Starts the same fade transition as a portal, but repositions the player on the current map instead of loading a new one.</summary>
-    public void StartRelocation(int targetColumn, int targetRow) => StartTransition(targetMap: null, targetColumn, targetRow);
+    public void StartRelocation(int targetColumn, int targetRow) => Transition.Start(targetMap: null, targetColumn, targetRow);
 
-    private void StartTransition(string? targetMap, int targetColumn, int targetRow)
+    /// <summary>Rolls for a random encounter if the player is standing on an encounter zone.</summary>
+    public void CheckEncounter(PlayerMarker player)
     {
-        _pendingTransition = new PendingTransition(targetMap, targetColumn, targetRow);
-        _transitionElapsed = 0f;
-        _hasSwapped = false;
+        if (Transition.IsActive || ActiveBattle is not null) return;
+        if (Map.GetTile(player.Column, player.Row) != TileType.EncounterZone) return;
+        if (Random.Shared.Next(100) >= EncounterSettings.TriggerChancePercent) return;
+
+        var encounter = _encounterGenerator.Generate();
+        Transition.Start(targetMap: null, player.Column, player.Row, onMidpoint: () => ActiveBattle = new Battle(encounter, Party, _battleResolver));
     }
 
-    /// <summary>Advances an in-progress transition, relocating the player (and swapping the map, if this one has a target map) at the midpoint (full black).</summary>
+    /// <summary>Fades back to the overworld once the current battle has finished — a party wipe is a forgiving game-over, not a dead end.</summary>
+    public void EndBattle(PlayerMarker player)
+    {
+        if (ActiveBattle?.Result == Battle.Outcome.Lost)
+        {
+            foreach (var member in Party.Members) member.FullyRestore();
+            Transition.Start(targetMap: null, PlayerSpawn.Column, PlayerSpawn.Row, onMidpoint: () => ActiveBattle = null);
+        }
+        else
+        {
+            Transition.Start(targetMap: null, player.Column, player.Row, onMidpoint: () => ActiveBattle = null);
+        }
+    }
+
+    /// <summary>Advances an in-progress transition, relocating the player (and swapping the map, if crossing one) at the midpoint.</summary>
     public void Tick(float deltaSeconds, PlayerMarker player)
     {
-        if (_pendingTransition is not { } transition) return;
+        if (Transition.Tick(deltaSeconds) is not { } relocation) return;
 
-        _transitionElapsed += deltaSeconds;
-        var half = TransitionSettings.FadeSeconds;
-
-        if (!_hasSwapped && _transitionElapsed >= half)
+        if (relocation.TargetMap is { } targetMap)
         {
-            if (transition.TargetMap is { } targetMap)
-            {
-                _current = MapLoader.Load(targetMap);
-            }
-
-            player.WarpTo(Map, transition.TargetColumn, transition.TargetRow);
-            _hasSwapped = true;
+            _current = MapLoader.Load(targetMap);
         }
 
-        if (_transitionElapsed >= half * 2)
-        {
-            TransitionFade = 0f;
-            _pendingTransition = null;
-            return;
-        }
-
-        TransitionFade = _transitionElapsed < half
-            ? _transitionElapsed / half
-            : 1f - (_transitionElapsed - half) / half;
+        player.WarpTo(Map, relocation.TargetColumn, relocation.TargetRow);
     }
 
     /// <summary>Whether the tile the player is currently facing holds something interactable.</summary>
@@ -108,44 +101,11 @@ internal sealed class GameWorld
     /// <summary>Interacts with whatever the player is currently facing. A no-op when there's nothing there.</summary>
     public void TryInteractWithFaced(PlayerMarker player)
     {
-        if (IsTransitioning || IsTalking) return;
+        if (Transition.IsActive || Conversation.IsTalking) return;
 
         var (column, row) = FacedTile(player);
         var interactable = FindInteractableAt(column, row);
         interactable?.Interact(this, player);
-    }
-
-    /// <summary>Queues plain lines to show, one at a time.</summary>
-    public void QueueDialogueLines(IEnumerable<string> lines)
-    {
-        foreach (var text in lines)
-        {
-            _dialogueSteps.Enqueue(new DialogueLine(text));
-        }
-    }
-
-    /// <summary>Queues a yes/no choice, run once the player picks an option.</summary>
-    public void QueueChoice(string prompt, string yesLabel, string noLabel, Action onYes, Action? onNo = null) =>
-        _dialogueSteps.Enqueue(new DialogueChoice(prompt, yesLabel, noLabel, onYes, onNo));
-
-    /// <summary>Flips which option is highlighted while a choice is showing.</summary>
-    public void ToggleChoiceSelection() => ChoiceYesSelected = !ChoiceYesSelected;
-
-    /// <summary>Dismisses the current line, revealing the next step if there is one. A no-op unless a plain line is showing.</summary>
-    public void AdvanceDialogue()
-    {
-        if (_dialogueSteps.Count > 0 && _dialogueSteps.Peek() is DialogueLine) _dialogueSteps.Dequeue();
-    }
-
-    /// <summary>Commits the highlighted option of the current choice, running its action. A no-op unless a choice is showing.</summary>
-    public void CommitChoice()
-    {
-        if (_dialogueSteps.Count == 0 || _dialogueSteps.Peek() is not DialogueChoice choice) return;
-
-        _dialogueSteps.Dequeue();
-        var pickedYes = ChoiceYesSelected;
-        ChoiceYesSelected = true;
-        (pickedYes ? choice.OnYes : choice.OnNo)?.Invoke();
     }
 
     private IInteractable? FindInteractableAt(int column, int row) =>
@@ -160,6 +120,4 @@ internal sealed class GameWorld
         Direction.Right => (player.Column + 1, player.Row),
         _ => (player.Column, player.Row),
     };
-
-    private readonly record struct PendingTransition(string? TargetMap, int TargetColumn, int TargetRow);
 }

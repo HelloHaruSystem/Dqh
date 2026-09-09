@@ -82,7 +82,38 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - **`Adventurer.FullyRestore()`** (heals HP and mana to max, safely — via the
   existing `Heal`/`RestoreMana`, not `int.MaxValue`) and **`IParty`/`Party.Members`**
   (read-only roster view) — added for the Inn's innkeeper NPC in `Dqh.Game`.
-- 27 xUnit tests in `tests/Dqh.Domain.Tests`, all passing.
+- **Speed and real Guard, added for the battle system.** `ICombatant.Speed`
+  (higher acts first in a round) on every `Adventurer` subclass and every
+  `MonsterDefinition` — Ranger/MetalSlime fastest, Priest/Slime slowest,
+  matching their DQ archetypes. `Adventurer.IsGuarding`/`ResetGuard()`:
+  `Warrior.Guard()` sets it, `Adventurer.TakeDamage` halves the hit while
+  it's set — the domain's `IDefender.Guard()` was flavor-text-only before
+  this; now it mechanically matters. Both were explicit choices over the
+  cheaper alternative (fixed party-then-monster order; flavor-only guard)
+  because the point of the exercise was an authentic DQ battle, not the
+  least Domain surface area.
+- **`Battles/` — the turn-based fight itself.** `BattleCommand` (`Attack`/
+  `Cast`/`Heal`/`Guard`/`Flee`, one per living party member per round) →
+  `IBattleResolver`/`StandardBattleResolver.ResolveRound(party, monsters,
+  commands)`: merges those commands with every living monster into one
+  list ordered by `Speed` descending and resolves each in turn, dispatching
+  by pattern-matching a command to the ability interface it needs
+  (`((ISpellcaster)actor).Cast(...)`, etc.) — every action still returns the
+  same flavor-text strings the ability interfaces always did, now collected
+  into a `BattleRoundResult.Log`. A monster's own turn rolls
+  `AttemptFlee()`/`ChooseTarget()`/`PerformAttack()` exactly as already
+  built — the resolver is genuinely just new orchestration over old parts.
+  A monster that flees is reported in `FledMonsters`, not removed by the
+  resolver itself (kept stateless/reusable — the caller owns the active
+  roster). A party member's successful `FleeCommand` ends the round for
+  everyone immediately (`PartyFled`), matching classic DQ's "whole party
+  runs together," not a per-character escape.
+- **`IEncounterGenerator`/`RandomEncounterGenerator`**: picks 1-3 monsters
+  uniformly from the whole bestiary for a fresh `Encounter`.
+- 37 xUnit tests in `tests/Dqh.Domain.Tests`, all passing (10 new, covering
+  Guard's damage halving, Speed ordering, each command type's dispatch, a
+  monster flee not being removed by the resolver, and the encounter
+  generator's group size).
 
 ## What's actually built (`src/Dqh.Game`)
 
@@ -289,29 +320,95 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   calls mutually exclusive per tick — `TryGetMove` is only ever reached when
   `confirmPressed` was false that tick, whether that's to read an up/down
   toggle or, when there's no choice to toggle, to drain a stray move.
-- **Not yet wired**: the innkeeper actually healing a `Party` — there's no
-  `Party` instance running in `Dqh.Game` yet at all (it stays purely a
-  `Dqh.Domain` concept until battle/party wiring lands), so "yes" currently
-  just relocates the player with no mechanical effect.
+- **`GameWorld` split into named collaborators**, addressing the structural
+  review from earlier this session (it had accreted transition timing *and*
+  dialogue state as raw fields): `World/MapTransition.cs` (fade timing only
+  — `Start(targetMap, column, row, onMidpoint)`/`Tick` returns the
+  relocation to apply exactly once, at the midpoint; `GameWorld` still owns
+  actually applying it, so `MapTransition` doesn't need to know `TileMap`/
+  `PlayerMarker` exist) and `World/Conversation.cs` (the dialogue/choice
+  queue, lifted out verbatim). `GameWorld` now exposes `Transition`/
+  `Conversation` as real properties (`world.Conversation.IsTalking`, not a
+  re-wrapped `world.IsTalking`) instead of piling more raw fields onto
+  itself for the third mode below.
+- **The battle system.** `Program.cs` now actually constructs a `Party`
+  (all five classes, named after themselves) — the first point in
+  `Dqh.Game` where a `Party` exists at all — plus a
+  `RandomEncounterGenerator`/`StandardBattleResolver`, both injected into
+  `GameWorld`. `GameWorld.CheckEncounter` (called alongside `CheckPortal`
+  after a successful move) rolls `EncounterSettings.TriggerChancePercent`
+  (35) on an `EncounterZone` tile; on a hit, it reuses the exact portal
+  fade (`MapTransition`, `targetMap: null`, i.e. don't relocate — just cut
+  to black) with an `onMidpoint` callback that sets `GameWorld.ActiveBattle`
+  instead of moving the player.
+
+  `World/Battle.cs` is the per-fight state machine: for each living party
+  member in turn, builds a command menu from which ability interfaces they
+  implement (`IAttacker` always → Attack; `+Spell`/`+Heal`/`+Defend`/`+Run`
+  for `ISpellcaster`/`IHealer`/`IDefender`/`IFleeable`), any needed
+  spell/target submenu via one reusable `World/BattleMenu.cs` cursor, then
+  calls `StandardBattleResolver.ResolveRound` once every living member has
+  a command. The round's result lines page through their own
+  `Conversation` instance (same paging UX as overworld dialogue, reused
+  type, separate instance) before the next round starts or the battle ends
+  (`Won`/`Lost`/`Fled`). `GameWorld.EndBattle` fades back to the overworld
+  the same way it fades in; a `Lost` battle is a forgiving game-over —
+  `FullyRestore()` the whole party and warp to `PlayerSpawn` — rather than
+  a dead end, since there's no save/load or game-over screen.
+
+  `Rendering/MonsterRenderer.cs` mirrors `NpcRenderer` (`Assets/Monsters/
+  {id}.png`, an explicit `MonsterKind → "metal_slime"` map for the one
+  non-trivial filename — the same class of bug already hit once with the
+  dock worker, avoided this time by writing the map instead of relying on
+  `.ToString()`). `RaylibWorldPresenter.Present` swaps the tile/camera view
+  for a dedicated battle screen entirely while `ActiveBattle` is set
+  (monster row + HP, party HP/MP list, the current menu or log box reusing
+  the dialogue box/`DrawChoiceOption` helpers already built);
+  `ConsoleWorldPresenter` prints the equivalent for headless parity.
+
+  Caught by actually playing it, not by reading the code: a bug in
+  `Battle.ResolveRound` where "no monsters left" was checked as
+  `_activeMonsters.All(m => m.IsDefeated)` — `All()` on an empty sequence
+  is vacuously true, so a group that entirely *fled* (removed from
+  `_activeMonsters`, not defeated) still reported "The monsters have been
+  defeated!" Fixed by checking the *original* `_encounter.Monsters` for
+  whether anything was actually defeated, to word the outcome accurately
+  either way, while still ending the battle as a win either way (nothing
+  left to fight is nothing left to fight). Also hit the same
+  `TryGetConfirm`/`TryGetMove` double-read ordering bug as sessions 8 and 9
+  a third time, this time in the battle branch — fixed the same way
+  (`TryGetMove` only reached when confirm wasn't this tick's input), and
+  it's now a pattern to check on sight in any new `GameLoop.Update` branch.
+
+  Verified headless end to end, including a real mixed-outcome fight (a
+  Slime and two Metal Slimes): per-class menus matched each adventurer's
+  actual interfaces, multi-monster target submenu appeared correctly,
+  Metal Slime (`Speed` 15, highest) acted and fled before anyone else's
+  turn, the Slime was defeated by the party's attacks, the round log paged
+  correctly, and the fade back to the overworld landed the player exactly
+  where they'd started — with the outcome message correctly reading
+  "defeated" rather than "flee" because at least one monster in the group
+  actually died.
+- **Not yet wired**: the innkeeper actually healing the (now real) `Party`
+  — `NpcBehaviors`' innkeeper flow only relocates the player next to the
+  bed today; wiring `Party.Members` through to it and calling
+  `FullyRestore()` on each is the rest of the work, now that a `Party`
+  exists in `Dqh.Game` to heal. Also: items, and the black-void interior
+  camera variant.
 
 ## Designed but not yet built
 
-- Items: `IItem`, `IUsable`, `IEquippable`, `HealingPotion`, `Sword`
-- `IEncounterGenerator` (factory for random encounters on overworld tiles)
-- `IBattleResolver` (swappable battle resolution, using `Party.ChooseTarget` and
-  `Monster.AttemptFlee`/`PerformAttack` to actually run a fight turn by turn)
-- Bump-to-talk NPC interaction, the innkeeper healing a constructed `Party`
-  via `Adventurer.FullyRestore()`, the dock worker's "no boats today" line —
-  map-to-map transitions themselves (`GameWorld`/portals) are now built; this
-  is specifically about the player bumping into an NPC's tile.
-- The black-void (unclamped) `Camera` variant for interior scenes
-- Wiring `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop
-  (stepping onto an `EncounterZone` tile should trigger a fight)
+- Items: `IItem`, `IUsable`, `IEquippable`, `HealingPotion`, `Sword` — no
+  battle-side hook for them yet either (no "Item" option in `Battle`'s menu).
+- The innkeeper actually healing the party (`NpcBehaviors` needs to call
+  `Adventurer.FullyRestore()` on each `Party.Members` entry — the `Party`
+  didn't exist in `Dqh.Game` until the battle system landed, now it does).
+- The black-void (unclamped) `Camera` variant for interior scenes.
 - Written justification for kernekrav h (why loose coupling makes the targeting
-  policy easy to change later) — a few sentences, per kernekrav i
+  policy easy to change later) — a few sentences, per kernekrav i.
 - Day-2 alternative-track choice (kernekrav's thread race-condition demo vs. one
   of the three alternatives — swap strategy, save/load, or an extra Adventurer
-  tier with its own state) — **not decided yet**
+  tier with its own state) — **not decided yet**.
 
 ## Session log
 
@@ -393,15 +490,16 @@ Two corrections worth remembering:
   layer since they're rendered independently of terrain.
 
 Next session:
-1. The innkeeper actually healing a real `Party` (`Adventurer.FullyRestore()`
-   already exists). Dialogue/map transitions are both done.
+1. The innkeeper actually healing the real `Party` that now exists in
+   `Dqh.Game` (`Adventurer.FullyRestore()` already exists — the only gap is
+   threading `Party.Members` into `NpcBehaviors`' innkeeper flow).
 2. Build the black-void camera variant for interior scenes.
-3. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
-   (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
-   then wire encounter/battle resolution into `Dqh.Game` so stepping onto an
-   `EncounterZone` tile triggers a fight.
+3. Items (`IItem`/`IUsable`/`IEquippable`, `HealingPotion`/`Sword`) and an
+   "Item" option in `Battle`'s command menu — the battle system itself
+   (`Battles/`, `Battle.cs`, encounter triggering) is done.
 4. Write the kernekrav h justification paragraph, pick the Day-2 alternative track.
-5. Keep `docs/domain-model.md` updated as each of the above lands.
+5. Keep `docs/domain-model.md` updated as each of the above lands — it still
+   only reflects the pre-battle-system domain shape.
 
 ### 2026-09-09 — Session 4
 

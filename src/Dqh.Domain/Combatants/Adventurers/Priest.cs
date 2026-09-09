@@ -11,10 +11,11 @@ public sealed class Priest : Adventurer, IAttacker, IHealer
     private const int MaxHitPointsValue = 26;
     private const int StartingMana = 50;
     private const int AttackDamage = 3;
+    private const int SpeedValue = 6;
 
     private readonly List<HealingSpell> _knownSpells;
 
-    public Priest(string name) : base(name, MaxHitPointsValue, StartingMana)
+    public Priest(string name) : base(name, MaxHitPointsValue, StartingMana, SpeedValue)
     {
         _knownSpells =
         [
