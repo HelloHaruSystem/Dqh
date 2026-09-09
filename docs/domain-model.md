@@ -1,8 +1,8 @@
 # Domain model
 
-The combat core as built in `src/Dqh.Domain` (kernekrav a/b). `Encounter`/`Party`/
-strategy/exceptions/etc. (kernekrav c–h) aren't built yet — see
-[`../PROGRESS.md`](../PROGRESS.md) for what's next.
+The domain as built in `src/Dqh.Domain` — combat core plus party/encounter
+management (kernekrav a–h). See [`../PROGRESS.md`](../PROGRESS.md) for what's next
+(items, encounter generation/battle resolution, wiring into `Dqh.Game`).
 
 ```mermaid
 classDiagram
@@ -28,9 +28,11 @@ classDiagram
         <<abstract>>
         -int _mana
         +int Mana
+        +CanAfford(manaCost) bool
         +SpendMana(amount) void
         +RestoreMana(amount) void
-        +UseSignatureMove(target)* string
+        +TakeTurn(target) string
+        +PerformTurnAction(target)* string
     }
     Adventurer ..|> ICombatant
     Adventurer *-- HitPointTrack : hit points
@@ -49,7 +51,9 @@ classDiagram
     Hero ..|> IAttacker
     Warrior ..|> IAttacker
     Warrior ..|> IDefender
+    Mage ..|> IAttacker
     Mage ..|> ISpellcaster
+    Priest ..|> IAttacker
     Priest ..|> IHealer
     Ranger ..|> IAttacker
     Ranger ..|> IFleeable
@@ -63,7 +67,7 @@ classDiagram
     }
     IMonster --|> ICombatant
 
-    class MonsterKind { <<enumeration>> Slime=1 Dracky=2 Ghost=3 }
+    class MonsterKind { <<enumeration>> Slime=1 Dracky=2 Ghost=3 MetalSlime=4 }
     class MonsterDefinition {
         +MonsterKind Kind
         +string Name
@@ -73,12 +77,20 @@ classDiagram
         +ElementType AttackElement
         +Weaknesses
         +string AttackDescriptionTemplate
+        +int AttackWeight
+        +int FleeWeight
     }
     class MonsterBestiary { <<internal, static>> +Get(kind) MonsterDefinition }
-    class Monster { +Create(kind)$ Monster +PerformAttack(target) string +IsWeakTo(element) bool }
+    class Monster {
+        +Create(kind)$ Monster
+        +PerformAttack(target) string
+        +AttemptFlee() bool
+        +IsWeakTo(element) bool
+    }
 
     Monster ..|> IMonster
     Monster ..|> IAttacker
+    Monster ..|> IFleeable
     Monster *-- HitPointTrack : hit points
     Monster o-- MonsterDefinition : stats
     Monster ..> MonsterBestiary : Create() looks up
@@ -102,10 +114,48 @@ classDiagram
     Mage ..> SpellBook : looks up
     Priest o-- HealingSpell : known spells
     Priest ..> SpellBook : looks up
+
+    class Encounter {
+        +Monsters
+        +bool IsResolved
+    }
+    Encounter o-- IMonster : monster group
+
+    class ITargetSelectionStrategy { <<interface>> +SelectTarget(attacker, availableTargets) Adventurer }
+    class RandomTargetStrategy { +SelectTarget(attacker, availableTargets) Adventurer }
+    RandomTargetStrategy ..|> ITargetSelectionStrategy
+
+    class IParty {
+        <<interface>>
+        +Register(adventurer) void
+        +Report(encounter) void
+        +ChooseTarget(attacker) Adventurer
+        +ResolveEncounter(encounter, onResolved) void
+        +FindAvailableHealer() Adventurer
+        +FindFirstUnresolvedEncounter() Encounter
+    }
+    class Party {
+        +Register(adventurer) void
+        +Report(encounter) void
+        +ChooseTarget(attacker) Adventurer
+        +ResolveEncounter(encounter, onResolved) void
+    }
+    Party ..|> IParty
+    Party o-- Adventurer : roster
+    Party *-- Encounter : encounter log
+    Party ..> ITargetSelectionStrategy : uses
+    Party ..> DomainToolbox : uses
+
+    class DomainToolbox { <<static>> +FindFirst~T~(items, predicate) T }
+
+    class UnknownSpellException
+    class AdventurerAlreadyRegisteredException
+    Exception <|-- UnknownSpellException
+    Exception <|-- AdventurerAlreadyRegisteredException
 ```
 
 **Reskin:** the brief's superhero dispatch case, renamed — `Hero`→`Adventurer`,
-`Incident`→`Encounter` (not built yet), `DispatchCenter`→`Party` (not built yet).
+`Incident`→`Encounter`, `DispatchCenter`→`Party`.
 
 ## Why it's shaped this way
 
@@ -117,17 +167,34 @@ classDiagram
   `MonsterKind` → `MonsterDefinition` → `MonsterBestiary` → single `Monster` class.
   Same pattern for spells (`ISpell` + `DamageSpell`/`HealingSpell`, no abstract
   `Spell` base) via `SpellId` → `SpellBook`.
+- **Every adventurer can attack; some also have a special ability.** `IAttacker` is
+  on all five concrete types (everyone can throw a basic hit), while
+  `ISpellcaster`/`IHealer`/`IDefender`/`IFleeable` are each exclusive to one —
+  matching a DQ battle menu (Attack is always available; Spell/Defend/Run aren't
+  universal here). `IAttacker` and `IFleeable` are also implemented by the
+  unrelated `Monster` class — ability, not position in a type tree.
+- **A monster's attack-vs-flee choice is weighted data, not a strategy class.**
+  `MonsterDefinition.AttackWeight`/`FleeWeight` drive `Monster.AttemptFlee()`'s
+  roll — regular monsters always attack (100/0); `MetalSlime` mostly flees
+  (10/90), matching its real reputation. This is how the original games actually
+  stored monster behavior (a per-species weight table), not object polymorphism.
+- **The one injected strategy is party-side, not monster-side.** Which living
+  party member a monster's attack lands on is genuinely swappable (front-biased,
+  random, lowest-HP, ...) and belongs to the party's formation — `Party` takes an
+  `ITargetSelectionStrategy` via its constructor (dependency inversion), first
+  implementation `RandomTargetStrategy`.
+- **Exceptions are for caller mistakes, not expected game states.** A party wipe,
+  running low on mana, or a defeated adventurer trying to act are normal outcomes
+  of play — `ChooseTarget` returns `null`, `Cast`/`Heal` return a message, instead
+  of throwing. `UnknownSpellException` (casting a spell you don't know) and
+  `AdventurerAlreadyRegisteredException` (registering the same adventurer twice)
+  only happen from an actual bug in the calling code, which is what an exception
+  should mean.
 - **Aggregation vs. composition, applied literally.** Catalogs (`MonsterBestiary`,
-  `SpellBook`) *compose* their entries — they own them. `Monster`/`Mage`/`Priest`
-  only *aggregate* a shared entry looked up from a catalog — they don't own it
-  exclusively. `HitPointTrack` is genuinely composed (private, dies with its owner).
-- **Ability interfaces cut across the hierarchy.** `IAttacker` is implemented by
-  three `Adventurer` subclasses *and* the unrelated `Monster` — capability, not
-  position in a type tree. `ISpellcaster`/`IHealer` are typed to their specific
-  spell class, so the compiler blocks casting a heal spell through the attack path.
-- **Elemental weaknesses are mechanical, not flavor.** `ElementType` mirrors DQ's
-  spell families (Fire/Ice/Wind/Explosion + Physical). `DamageSpell.Apply` doubles
-  damage when the target `IMonster` is weak to its element.
+  `SpellBook`) *compose* their entries — they own them. `Monster`/`Mage`/`Priest`/
+  `Party`'s roster only *aggregate* — many share the same catalog entry, or exist
+  independently of the party. `Party`'s encounter log and each combatant's
+  `HitPointTrack` are genuinely composed (owned exclusively, die with their owner).
 - **Access modifiers, restrictive by default.** Leaf classes `sealed`; internal
   helpers (`HitPointTrack`, `MonsterBestiary`, `SpellBook`) `internal`; mutable
   state is a public getter behind a `private` setter, changed only via validated

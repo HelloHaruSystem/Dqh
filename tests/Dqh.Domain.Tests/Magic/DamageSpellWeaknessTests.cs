@@ -1,5 +1,6 @@
 using Dqh.Domain.Combatants.Adventurers;
 using Dqh.Domain.Combatants.Monsters;
+using Dqh.Domain.Exceptions;
 using Dqh.Domain.Magic;
 
 namespace Dqh.Domain.Tests.Magic;
@@ -24,7 +25,7 @@ public class DamageSpellWeaknessTests
     }
 
     [Fact]
-    public void Cast_SpellNotInKnownList_ThrowsArgumentException()
+    public void Cast_SpellNotInKnownList_ThrowsUnknownSpellException()
     {
         var mage = new Mage("Test Mage");
         var target = Monster.Create(MonsterKind.Slime);
@@ -32,6 +33,27 @@ public class DamageSpellWeaknessTests
             "Improvised Bolt", manaCost: 1, power: 1, element: ElementType.Physical,
             descriptionTemplate: "{0} improvises against {1}");
 
-        Assert.Throws<ArgumentException>(() => mage.Cast(unknownSpell, target));
+        Assert.Throws<UnknownSpellException>(() => mage.Cast(unknownSpell, target));
+    }
+
+    [Fact]
+    public void Cast_NotEnoughMana_ReturnsMessageWithoutSpendingOrApplying()
+    {
+        var mage = new Mage("Test Mage");
+        var target = Monster.Create(MonsterKind.Slime);
+        var expensiveSpell = mage.KnownSpells[^1]; // Inferno
+        while (mage.CanAfford(expensiveSpell.ManaCost))
+        {
+            mage.SpendMana(expensiveSpell.ManaCost);
+        }
+
+        var manaBefore = mage.Mana;
+        var startingHitPoints = target.CurrentHitPoints;
+
+        var description = mage.Cast(expensiveSpell, target);
+
+        Assert.Contains("enough mana", description);
+        Assert.Equal(manaBefore, mage.Mana);
+        Assert.Equal(startingHitPoints, target.CurrentHitPoints);
     }
 }

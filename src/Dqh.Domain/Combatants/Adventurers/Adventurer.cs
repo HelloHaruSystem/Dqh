@@ -2,11 +2,7 @@ using Dqh.Domain.Combatants;
 
 namespace Dqh.Domain.Combatants.Adventurers;
 
-/// <summary>
-/// A party member. Encapsulates hit points and mana (0-100, invalid values are
-/// clamped rather than accepted) and defines the polymorphism hook every concrete
-/// adventurer type must implement differently.
-/// </summary>
+/// <summary>A party member with encapsulated hit points and mana (0-100).</summary>
 public abstract class Adventurer : ICombatant
 {
     private const int MinMana = 0;
@@ -45,14 +41,14 @@ public abstract class Adventurer : ICombatant
 
     public void Heal(int amount) => _hitPoints.Heal(amount);
 
+    public bool CanAfford(int manaCost) => manaCost <= Mana;
+
     /// <param name="amount">Non-negative mana to spend; clamped at 0 if it exceeds the current amount.</param>
     public void SpendMana(int amount)
     {
         if (amount < 0)
             throw new ArgumentOutOfRangeException(nameof(amount), "Mana cost cannot be negative.");
 
-        // Deliberately permissive for now: this will start throwing
-        // InsufficientManaException once kernekrav e) lands.
         Mana -= amount;
     }
 
@@ -65,8 +61,11 @@ public abstract class Adventurer : ICombatant
         Mana += amount;
     }
 
-    /// <summary>Each concrete adventurer's unique battle action. This is the assignment's polymorphism proof.</summary>
-    /// <param name="target">Who the move affects.</param>
-    /// <returns>A flavor-text description of what happened.</returns>
-    public abstract string UseSignatureMove(ICombatant target);
+    /// <param name="target">Who the action affects.</param>
+    /// <returns>A description of what happened — or that this adventurer is defeated and can't act.</returns>
+    public string TakeTurn(ICombatant target) =>
+        IsDefeated ? $"{Name} is defeated and can't act." : PerformTurnAction(target);
+
+    /// <summary>Each concrete adventurer's own way of acting on their turn.</summary>
+    protected abstract string PerformTurnAction(ICombatant target);
 }

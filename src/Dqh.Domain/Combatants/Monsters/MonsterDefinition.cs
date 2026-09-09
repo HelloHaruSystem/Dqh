@@ -16,8 +16,12 @@ public sealed class MonsterDefinition
     public ElementType AttackElement { get; }
     public IReadOnlySet<ElementType> Weaknesses { get; }
     public string AttackDescriptionTemplate { get; }
+    public int AttackWeight { get; }
+    public int FleeWeight { get; }
 
     /// <param name="attackDescriptionTemplate">Flavor text with {0}=attacker name, {1}=target name.</param>
+    /// <param name="attackWeight">Relative weight of attacking on a given turn, versus <paramref name="fleeWeight"/>.</param>
+    /// <param name="fleeWeight">Relative weight of fleeing on a given turn, versus <paramref name="attackWeight"/>.</param>
     public MonsterDefinition(
         MonsterKind kind,
         string name,
@@ -26,7 +30,9 @@ public sealed class MonsterDefinition
         int defensePower,
         ElementType attackElement,
         IEnumerable<ElementType> weaknesses,
-        string attackDescriptionTemplate)
+        string attackDescriptionTemplate,
+        int attackWeight,
+        int fleeWeight)
     {
         Kind = kind;
         Name = name;
@@ -36,5 +42,7 @@ public sealed class MonsterDefinition
         AttackElement = attackElement;
         Weaknesses = weaknesses.ToHashSet();
         AttackDescriptionTemplate = attackDescriptionTemplate;
+        AttackWeight = attackWeight;
+        FleeWeight = fleeWeight;
     }
 }
