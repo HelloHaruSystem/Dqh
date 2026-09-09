@@ -173,11 +173,30 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   decorations), so a rendered NPC is solid — the player can no longer walk
   through it invisibly. `ConsoleWorldPresenter`'s ASCII dump got matching
   symbols (`I` innkeeper, `W` dock worker) for headless parity.
-- **Not yet wired**: `Scene`/`Portal`/`GameWorld` (map-to-map transitions,
-  bump-to-talk NPC interaction, the innkeeper actually healing a `Party`) —
-  designed in an earlier plan-mode session, predates the asset-first pivot, and
-  still needs to be built against what actually exists now. NPCs render and
-  block movement; they don't do anything yet when bumped into.
+- **Map-to-map portals**: `World/GameWorld.cs` owns the currently-loaded map —
+  `Map`/`Decorations`/`Npcs`/`PlayerSpawn`, all delegating to whatever
+  `MapLoader.Load` last returned. `GameWorld.CheckPortal(player)` (called from
+  `GameLoop.Update` right after a successful `player.Move`) checks the
+  player's new tile against the current map's `Portals`; on a match it
+  reloads the target map (re-running `MapLoader.Load`, which re-blocks that
+  map's own decorations/NPCs for free) and calls the pre-existing
+  `PlayerMarker.WarpTo`. `Program.cs`/`GameLoop.Run` now pass a `GameWorld`
+  instead of a fixed `TileMap`/decorations/NPCs triplet, so the active map can
+  change mid-loop; `IWorldPresenter`/the renderers are untouched; they still
+  just draw whatever `GameWorld` currently reports each frame. Verified
+  headless: walking onto the overworld's door (9,19) lands in the inn at
+  (5,8); walking onto the inn's door (5,9) lands back on the overworld at
+  (9,20). Caught and fixed a map-data bug along the way: `overworld.json`'s
+  portal targeted the inn's own door tile (5,9) instead of its floor tile one
+  step off it (5,8) — the inn-to-overworld portal already had this right
+  (targets (9,20), not its own door at (9,19)); left uncaught it wouldn't
+  have looped, but would've dropped the player exactly on the threshold tile
+  instead of just inside.
+- **Not yet wired**: bump-to-talk NPC interaction (dialogue, the innkeeper
+  actually healing a `Party`, the dock worker's line) — designed in an
+  earlier plan-mode session, predates the asset-first pivot. NPCs render,
+  block movement, and portals move the player between maps; nothing happens
+  yet when the player bumps into an NPC specifically.
 
 ## Designed but not yet built
 
@@ -185,11 +204,10 @@ justification, and whichever Day-2 alternative track gets picked (see below).
 - `IEncounterGenerator` (factory for random encounters on overworld tiles)
 - `IBattleResolver` (swappable battle resolution, using `Party.ChooseTarget` and
   `Monster.AttemptFlee`/`PerformAttack` to actually run a fight turn by turn)
-- `Scene`/`Portal`/`GameWorld` in `Dqh.Game` — map-to-map transitions (walking
-  through the Inn's door and back), bump-to-talk NPC interaction, the
-  innkeeper healing a constructed `Party` via `Adventurer.FullyRestore()`, the
-  dock worker's "no boats today" line. Assets/maps/camera/movement/NPC
-  rendering are all in place for this now; it's purely the wiring left.
+- Bump-to-talk NPC interaction, the innkeeper healing a constructed `Party`
+  via `Adventurer.FullyRestore()`, the dock worker's "no boats today" line —
+  map-to-map transitions themselves (`GameWorld`/portals) are now built; this
+  is specifically about the player bumping into an NPC's tile.
 - The black-void (unclamped) `Camera` variant for interior scenes
 - Wiring `Encounter`/`Party`/battle resolution into the `Dqh.Game` raylib loop
   (stepping onto an `EncounterZone` tile should trigger a fight)
@@ -279,9 +297,8 @@ Two corrections worth remembering:
   layer since they're rendered independently of terrain.
 
 Next session:
-1. Build `Scene`/`Portal`/`GameWorld` — the Inn door transition, bump-to-talk
-   NPC interaction (NPCs render and block movement now, but do nothing yet
-   when bumped into), innkeeper healing a real `Party`, dock worker's line.
+1. Bump-to-talk NPC interaction — dialogue, innkeeper healing a real `Party`,
+   dock worker's line. Map-to-map transitions (`GameWorld`/portals) are done.
 2. Build the black-void camera variant for interior scenes.
 3. Items (`IItem`/`IUsable`/`IEquippable`), `IEncounterGenerator`, `IBattleResolver`
    (using the pieces already built: `Party.ChooseTarget`, `Monster.AttemptFlee`),
@@ -314,7 +331,7 @@ un-DQ-authentic feel, not the actual bug.
 
 ### 2026-09-09 — Session 5
 
-Rendered the NPCs (`innkeeper`, `dockWorker`) that were already sitting in the
+Rendered the NPCs (`innkeeper`, `dock_worker`) that were already sitting in the
 map JSON with no visual. `NpcRenderer` mirrors `PropRenderer`'s shape (per-id
 cached texture from `Assets/Characters`, culled to camera) — kept as its own
 class rather than unifying with `PropRenderer` despite the near-identical draw
@@ -325,5 +342,32 @@ presenters/`Program.cs` the same way `DecorationData` already flows.
 `MapLoader.Load` now also calls the existing `TileMap.Block` for each NPC
 position (the same one-liner already used for decorations) — without it, a
 now-visible NPC would let the player walk straight through it. Bump-to-talk
-interaction itself stays out of scope, deferred to the `Scene`/`Portal`/
-`GameWorld` wiring next session.
+interaction itself stays out of scope, deferred to a later session.
+
+Shipped with a bug: `overworld.json`'s dock worker was `"id": "dockWorker"`,
+but the actual asset (like every other multi-word asset in the project —
+`bar_counter.png`, `bed_head.png`, `encounter_zone.png`) is snake_case,
+`dock_worker.png`. `Raylib.LoadTexture` on a missing path fails silently
+(a 0x0 texture that draws nothing) rather than throwing, so the NPC blocked
+movement correctly but rendered as nothing — caught via playtesting
+("it doesn't render but it blocks the worker"), fixed by renaming the id to
+`dock_worker` to match convention rather than renaming the asset.
+
+### 2026-09-09 — Session 6
+
+Wired map-to-map portals: `World/GameWorld.cs` owns whichever map is
+currently loaded (`Map`/`Decorations`/`Npcs`/`PlayerSpawn`, delegating to
+`MapLoader.Load`'s result) and `CheckPortal(player)` swaps it — reloading the
+target map (which re-blocks its own decorations/NPCs for free, reusing
+`MapLoader.Load` as-is) and calling the already-existing
+`PlayerMarker.WarpTo`. `GameLoop.Update` calls it right after a successful
+`player.Move`. `Program.cs`/`GameLoop.Run` now thread a `GameWorld` through
+instead of a fixed `TileMap`/decorations/NPCs triplet — `IWorldPresenter` and
+every renderer are untouched, since they only ever drew whatever they were
+handed per frame, not the map itself. Caught a map-data bug while verifying:
+`overworld.json`'s portal targeted the inn's own door tile (5,9) instead of
+its floor tile one step off it (5,8) — asymmetric with the inn's own portal,
+which already correctly targets the overworld's floor at (9,20) rather than
+its own door at (9,19). Verified both directions headless: walking onto
+(9,19) lands in the inn at (5,8); walking onto the inn's (5,9) lands back at
+(9,20).

@@ -10,30 +10,30 @@ using Raylib_cs;
 // Composition root: the only place that decides which concrete IInputSource/
 // IWorldPresenter/IClock to use. GameLoop itself never knows Raylib exists,
 // which is what makes headless mode possible.
-var (map, entities) = MapLoader.Load("overworld");
-var player = new PlayerMarker(map, entities.PlayerSpawn.Column, entities.PlayerSpawn.Row);
+var world = new GameWorld("overworld");
+var player = new PlayerMarker(world.Map, world.PlayerSpawn.Column, world.PlayerSpawn.Row);
 
 var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));
 
 if (headless)
 {
-    RunHeadless(map, entities.Decorations, entities.Npcs, player);
+    RunHeadless(world, player);
 }
 else
 {
-    RunWindowed(map, entities.Decorations, entities.Npcs, player);
+    RunWindowed(world, player);
 }
 
-static void RunHeadless(TileMap map, List<DecorationData> decorations, List<NpcData> npcs, PlayerMarker player)
+static void RunHeadless(GameWorld world, PlayerMarker player)
 {
     IInputSource input = new ConsoleInputSource();
     IWorldPresenter presenter = new ConsoleWorldPresenter();
     IClock clock = new HeadlessClock();
 
-    GameLoop.Run(map, decorations, npcs, player, input, presenter, clock);
+    GameLoop.Run(world, player, input, presenter, clock);
 }
 
-static void RunWindowed(TileMap map, List<DecorationData> decorations, List<NpcData> npcs, PlayerMarker player)
+static void RunWindowed(GameWorld world, PlayerMarker player)
 {
     Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
     Raylib.InitWindow(GridSettings.WindowWidth, GridSettings.WindowHeight, "DQH - overworld proof of concept");
@@ -52,7 +52,7 @@ static void RunWindowed(TileMap map, List<DecorationData> decorations, List<NpcD
     IWorldPresenter presenter = new RaylibWorldPresenter(tileRenderer, playerRenderer, propRenderer, npcRenderer);
     IClock clock = new RaylibClock();
 
-    GameLoop.Run(map, decorations, npcs, player, input, presenter, clock);
+    GameLoop.Run(world, player, input, presenter, clock);
 
     tileRenderer.Dispose();
     propRenderer.Dispose();

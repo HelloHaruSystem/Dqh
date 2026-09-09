@@ -12,24 +12,25 @@ namespace Dqh.Game;
 /// </summary>
 internal static class GameLoop
 {
-    public static void Run(TileMap map, IReadOnlyList<DecorationData> decorations, IReadOnlyList<NpcData> npcs, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
+    public static void Run(GameWorld world, PlayerMarker player, IInputSource input, IWorldPresenter presenter, IClock clock)
     {
-        presenter.Present(map, decorations, npcs, player, clock.DeltaSeconds);
+        presenter.Present(world.Map, world.Decorations, world.Npcs, player, clock.DeltaSeconds);
 
         while (!input.IsQuitRequested)
         {
-            Update(player, input, clock.DeltaSeconds);
-            presenter.Present(map, decorations, npcs, player, clock.DeltaSeconds);
+            Update(world, player, input, clock.DeltaSeconds);
+            presenter.Present(world.Map, world.Decorations, world.Npcs, player, clock.DeltaSeconds);
         }
     }
 
-    private static void Update(PlayerMarker player, IInputSource input, float deltaSeconds)
+    private static void Update(GameWorld world, PlayerMarker player, IInputSource input, float deltaSeconds)
     {
         player.Tick(deltaSeconds);
 
         if (input.TryGetMove(deltaSeconds, out var columnDelta, out var rowDelta))
         {
             player.Move(columnDelta, rowDelta);
+            world.CheckPortal(player);
         }
     }
 }

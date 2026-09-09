@@ -4,7 +4,7 @@
     { "id": "dock_worker", "column": 35, "row": 13 }
   ],
   "portals": [
-    { "column": 9, "row": 19, "targetMap": "inn", "targetColumn": 5, "targetRow": 9 }
+    { "column": 9, "row": 19, "targetMap": "inn", "targetColumn": 5, "targetRow": 8 }
   ],
   "decorations": [
     { "id": "sign", "column": 7, "row": 19 }
