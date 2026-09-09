@@ -61,6 +61,13 @@ public abstract class Adventurer : ICombatant
         Mana += amount;
     }
 
+    /// <summary>Fully restores hit points and mana — an inn's rest.</summary>
+    public void FullyRestore()
+    {
+        Heal(MaxHitPoints);
+        RestoreMana(MaxMana);
+    }
+
     /// <param name="target">Who the action affects.</param>
     /// <returns>A description of what happened — or that this adventurer is defeated and can't act.</returns>
     public string TakeTurn(ICombatant target) =>

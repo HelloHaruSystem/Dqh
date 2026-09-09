@@ -20,6 +20,8 @@ public sealed class Party : IParty
         _targetSelectionStrategy = targetSelectionStrategy;
     }
 
+    public IReadOnlyList<Adventurer> Members => _roster;
+
     /// <exception cref="AdventurerAlreadyRegisteredException"><paramref name="adventurer"/> is already registered.</exception>
     public void Register(Adventurer adventurer)
     {
