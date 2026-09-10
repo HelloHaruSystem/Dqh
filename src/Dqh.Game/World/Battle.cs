@@ -9,9 +9,7 @@ using Dqh.Domain.Party;
 namespace Dqh.Game.World;
 
 /// <summary>
-/// One fight: command a living party member each round (menu built from
-/// which ability interfaces they implement), resolve the round fastest
-/// first, page through the log, repeat until victory/flee/party wipe.
+/// One fight: command a living party member each round. 
 /// </summary>
 internal sealed class Battle
 {
