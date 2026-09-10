@@ -15,14 +15,14 @@ using Raylib_cs;
 // Composition root: the only place that decides which concrete IInputSource/
 // IWorldPresenter/IClock to use. GameLoop itself never knows Raylib exists,
 // which is what makes headless mode possible.
-var party = new Party(new RandomTargetStrategy());
+var party = new Party();
 party.Register(new Hero("Hero"));
 party.Register(new Warrior("Warrior"));
 party.Register(new Mage("Mage"));
 party.Register(new Priest("Priest"));
 party.Register(new Ranger("Ranger"));
 
-var world = new GameWorld("overworld", party, new RandomEncounterGenerator(), new StandardBattleResolver());
+var world = new GameWorld("overworld", party, new RandomEncounterGenerator(new RandomTargetStrategy()), new StandardBattleResolver());
 var player = new PlayerMarker(world.Map, world.PlayerSpawn.Column, world.PlayerSpawn.Row);
 
 var headless = args.Any(a => a.Equals("--headless", StringComparison.OrdinalIgnoreCase));

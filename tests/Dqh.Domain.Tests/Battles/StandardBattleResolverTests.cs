@@ -1,7 +1,6 @@
 using Dqh.Domain.Battles;
 using Dqh.Domain.Combatants.Adventurers;
 using Dqh.Domain.Combatants.Monsters;
-using Dqh.Domain.Strategies;
 
 namespace Dqh.Domain.Tests.Battles;
 
@@ -12,7 +11,7 @@ public class StandardBattleResolverTests
     {
         var ranger = new Ranger("Ranger");
         var priest = new Priest("Priest");
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(priest);
         party.Register(ranger);
         var monster = Monster.Create(MonsterKind.Slime);
@@ -27,7 +26,7 @@ public class StandardBattleResolverTests
     public void ResolveRound_AttackCommand_DamagesTarget()
     {
         var hero = new Hero("Hero");
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(hero);
         var monster = Monster.Create(MonsterKind.Slime);
         var startingHitPoints = monster.CurrentHitPoints;
@@ -42,7 +41,7 @@ public class StandardBattleResolverTests
     public void ResolveRound_CastCommand_DamagesTarget()
     {
         var mage = new Mage("Mage");
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(mage);
         var monster = Monster.Create(MonsterKind.Ghost);
         var startingHitPoints = monster.CurrentHitPoints;
@@ -59,7 +58,7 @@ public class StandardBattleResolverTests
         var priest = new Priest("Priest");
         var ally = new Warrior("Warrior");
         ally.TakeDamage(20);
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(priest);
         party.Register(ally);
         var monster = Monster.Create(MonsterKind.Slime);
@@ -75,7 +74,7 @@ public class StandardBattleResolverTests
     public void ResolveRound_GuardCommand_SetsIsGuarding()
     {
         var warrior = new Warrior("Warrior");
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(warrior);
         var monster = Monster.Create(MonsterKind.Slime);
         var resolver = new StandardBattleResolver();
@@ -92,7 +91,7 @@ public class StandardBattleResolverTests
         // gets its turn — so only the first line (the attempt itself) is
         // deterministic here, not the log's total length.
         var ranger = new Ranger("Ranger");
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(ranger);
         var monster = Monster.Create(MonsterKind.Slime);
         var resolver = new StandardBattleResolver();
@@ -105,7 +104,7 @@ public class StandardBattleResolverTests
     [Fact]
     public void ResolveRound_DoesNotMutateGivenMonsterList()
     {
-        var party = new Domain.Party.Party(new RandomTargetStrategy());
+        var party = new Domain.Party.Party();
         party.Register(new Warrior("Warrior"));
         var monster = Monster.Create(MonsterKind.MetalSlime);
         IReadOnlyList<IMonster> monsters = [monster];

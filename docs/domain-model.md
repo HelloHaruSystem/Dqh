@@ -88,9 +88,10 @@ classDiagram
     }
     class MonsterBestiary { <<internal, static>> +Get(kind) MonsterDefinition }
     class Monster {
-        +Create(kind)$ Monster
+        +Create(kind, targetSelectionStrategy)$ Monster
         +PerformAttack(target) string
         +AttemptFlee() bool
+        +ChooseTarget(availableTargets) Adventurer
         +IsWeakTo(element) bool
     }
 
@@ -100,6 +101,7 @@ classDiagram
     Monster *-- HitPointTrack : hit points
     Monster o-- MonsterDefinition : stats
     Monster ..> MonsterBestiary : Create() looks up
+    Monster ..> ITargetSelectionStrategy : uses
     MonsterBestiary *-- MonsterDefinition : catalog
     MonsterBestiary ..> MonsterKind : keyed by
 
@@ -130,7 +132,8 @@ classDiagram
     class IEncounterGenerator { <<interface>> +Generate() Encounter }
     class RandomEncounterGenerator { +Generate() Encounter }
     RandomEncounterGenerator ..|> IEncounterGenerator
-    RandomEncounterGenerator ..> Monster : Create()
+    RandomEncounterGenerator ..> Monster : Create(kind, strategy)
+    RandomEncounterGenerator o-- ITargetSelectionStrategy : injected, passed to each Monster
 
     class BattleCommand { <<abstract>> +Adventurer Actor }
     class AttackCommand { +IMonster Target }
@@ -150,8 +153,7 @@ classDiagram
     StandardBattleResolver ..|> IBattleResolver
     StandardBattleResolver ..> BattleCommand : dispatches by type
     StandardBattleResolver ..> BattleRoundResult : returns
-    StandardBattleResolver ..> IParty : ChooseTarget
-    StandardBattleResolver ..> IMonster : AttemptFlee / PerformAttack
+    StandardBattleResolver ..> IMonster : ChooseTarget / AttemptFlee / PerformAttack
 
     class ITargetSelectionStrategy { <<interface>> +SelectTarget(attacker, availableTargets) Adventurer }
     class RandomTargetStrategy { +SelectTarget(attacker, availableTargets) Adventurer }
@@ -162,7 +164,6 @@ classDiagram
         +Members IReadOnlyList~Adventurer~
         +Register(adventurer) void
         +Report(encounter) void
-        +ChooseTarget(attacker) Adventurer
         +ResolveEncounter(encounter, onResolved) void
         +FindAvailableHealer() Adventurer
         +FindFirstUnresolvedEncounter() Encounter
@@ -171,13 +172,11 @@ classDiagram
         +Members IReadOnlyList~Adventurer~
         +Register(adventurer) void
         +Report(encounter) void
-        +ChooseTarget(attacker) Adventurer
         +ResolveEncounter(encounter, onResolved) void
     }
     Party ..|> IParty
     Party o-- Adventurer : roster
     Party *-- Encounter : encounter log
-    Party ..> ITargetSelectionStrategy : uses
     Party ..> DomainToolbox : uses
 
     class DomainToolbox { <<static>> +FindFirst~T~(items, predicate) T }
@@ -212,11 +211,23 @@ classDiagram
   roll — regular monsters always attack (100/0); `MetalSlime` mostly flees
   (10/90), matching its real reputation. This is how the original games actually
   stored monster behavior (a per-species weight table), not object polymorphism.
-- **The one injected strategy is party-side, not monster-side.** Which living
-  party member a monster's attack lands on is genuinely swappable (front-biased,
-  random, lowest-HP, ...) and belongs to the party's formation — `Party` takes an
-  `ITargetSelectionStrategy` via its constructor (dependency inversion), first
-  implementation `RandomTargetStrategy`.
+- **The injected strategy lives on the attacker, not the target.** Which living
+  party member a monster's attack lands on is the monster's decision to make —
+  the same category of choice as `AttemptFlee()`'s attack/flee weights, just
+  swappable instead of data-driven, since a real second implementation
+  (front-biased, lowest-HP, ...) is worth having here. `Monster` takes an
+  `ITargetSelectionStrategy` at construction (dependency inversion, kernekrav h)
+  and exposes `ChooseTarget(availableTargets)`; `RandomEncounterGenerator` is
+  where it's actually injected (constructor param, passed to every `Monster.Create`
+  it calls), first implementation `RandomTargetStrategy`. This replaced an
+  earlier version where `Party` held the strategy and answered
+  `ChooseTarget(attacker)` on the monster's behalf — technically working, but
+  backwards: `Party` doesn't decide who a monster attacks, the monster does, and
+  the "party formation" framing that justified it wasn't an actual mechanic in
+  the game, just a rationalization for parking kernekrav h's required strategy
+  somewhere. Also fixes a precedent inconsistency: monster behavior everywhere
+  else (`AttackWeight`/`FleeWeight`) already lives on the monster side, not the
+  thing it acts on.
 - **Speed decides turn order; Guard actually reduces damage.** Neither existed
   until the battle loop needed them — a fixed party-then-monster order and a
   flavor-only `Guard()` would've been the cheaper Domain change, but an
@@ -236,7 +247,7 @@ classDiagram
   `BattleRoundResult.Log` instead of handed back one call at a time. A
   monster's own turn still rolls `AttemptFlee()` against
   `AttackWeight`/`FleeWeight` and, if it doesn't flee, still calls
-  `Party.ChooseTarget` then `PerformAttack` — nothing about *how* a monster
+  `Monster.ChooseTarget` then `PerformAttack` — nothing about *how* a monster
   decides to act changed, only that something now actually calls it every
   round. A fled monster is reported in `BattleRoundResult.FledMonsters`
   rather than removed by the resolver itself, keeping it a stateless,
@@ -247,7 +258,12 @@ classDiagram
   consistency, not a second requirement) — `RandomEncounterGenerator` builds
   a group of 1-3 monsters from the whole bestiary via the existing
   `Monster.Create`, swappable for a different generation policy later without
-  touching whatever calls it.
+  touching whatever calls it. It's also now `ITargetSelectionStrategy`'s actual
+  injection point (see above) — it holds the strategy and hands it to every
+  `Monster` it creates, so every monster from a given generator shares one
+  targeting policy without `Monster.Create`'s other 27 call sites (mostly
+  tests with no interest in targeting) needing to supply one; the factory
+  falls back to `RandomTargetStrategy` when none is given.
 - **Exceptions are for caller mistakes, not expected game states.** A party wipe,
   running low on mana, or a defeated adventurer trying to act are normal outcomes
   of play — `ChooseTarget` returns `null`, `Cast`/`Heal` return a message, instead

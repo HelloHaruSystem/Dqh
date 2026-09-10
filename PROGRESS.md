@@ -19,7 +19,7 @@ at the end.
 | e) ≥2 custom exceptions | `UnknownSpellException`, `AdventurerAlreadyRegisteredException` | **Done** |
 | f) callback on resolution | `Party.ResolveEncounter(Encounter, Action<Encounter>)` | **Done** |
 | g) UML before coding | `docs/domain-model.md` (Mermaid) | **Done** — matches current code |
-| h) dependency inversion via injected strategy | `ITargetSelectionStrategy` → `Party` ctor | **Done** |
+| h) dependency inversion via injected strategy | `ITargetSelectionStrategy` → `RandomEncounterGenerator` ctor, passed to `Monster` | **Done** |
 | i) documentation & git history | README, XML docs, incremental commits | In progress (README covers build/run; written justification for h) still missing) |
 
 All of kernekrav a–h are now built. Remaining before hand-in: items/i)'s written
@@ -59,15 +59,22 @@ justification, and whichever Day-2 alternative track gets picked (see below).
   `IsResolved`. No adventurer reference on it — the whole living party faces an
   encounter together, there's no "one hero is dispatched to handle it."
 - **`IParty`/`Party`**: `Register`/`Report` (roster + encounter log, kernekrav c),
-  `ChooseTarget(attacker)` (uses the injected `ITargetSelectionStrategy` —
-  kernekrav h — to pick which living member a monster's attack lands on; `null`
-  if the whole party is defeated), `ResolveEncounter` (the callback, kernekrav f),
-  `FindAvailableHealer()`/`FindFirstUnresolvedEncounter()` (the generic search,
-  kernekrav d, over the roster and the encounter log respectively).
+  `ResolveEncounter` (the callback, kernekrav f), `FindAvailableHealer()`/
+  `FindFirstUnresolvedEncounter()` (the generic search, kernekrav d, over the
+  roster and the encounter log respectively). No longer holds any targeting
+  logic — see below.
 - **`ITargetSelectionStrategy`/`RandomTargetStrategy`** (kernekrav h): injected
-  into `Party`'s constructor. Targets a uniformly random living party member —
-  matches how DQ's actual targeting works (mostly random/formation-weighted, not
-  a computed "best target").
+  into `Monster`'s constructor (via `RandomEncounterGenerator`, which is where
+  it's actually provided), exposed as `Monster.ChooseTarget(availableTargets)`.
+  Targets a uniformly random living party member — matches how DQ's actual
+  targeting works (mostly random/formation-weighted, not a computed "best
+  target"). Originally lived on `Party` (`Party.ChooseTarget(attacker)`) —
+  moved to the monster side after review: "who does a monster attack" is the
+  same category of decision as `AttackWeight`/`FleeWeight` (both monster
+  behavior), so it belongs with the attacker, not the target. `Party` keeping
+  it was a case of parking kernekrav h's required strategy wherever a
+  plausible-sounding justification ("party formation") could be written for
+  it, not where the decision actually belongs.
 - **Exceptions are for caller bugs, not expected game states.** A party wipe,
   low mana, or a defeated adventurer trying to act are normal outcomes of play —
   modeled as a `null` return / a descriptive message, not a throw.
@@ -673,3 +680,36 @@ whether the accumulated `Dqh.Game` changes (animation, NPCs, portals,
 transitions, dialogue, choices, welcome screen — sessions 4 through 10) are
 still well-structured, given how much has landed without a dedicated pass to
 step back and check. That review is still pending.
+
+### 2026-09-10 — Session 11
+
+Two fixes from a user code-review pass, one at a time:
+
+- **Battle screen now states whose turn it is.** `Battle.CurrentActor` (set
+  whenever a party member's main/spell/target menu is up, cleared once the
+  round resolves) is drawn as "{name}'s turn" above the command menu — both
+  `RaylibWorldPresenter` and `ConsoleWorldPresenter`. Verified headless with a
+  scripted fight: the label stepped Hero → Warrior → Mage → Priest → Ranger
+  correctly each round.
+- **Moved monster targeting off `Party`, onto `Monster`.** Flagged by the user
+  as a code smell: `Party.ChooseTarget(attacker)` held the injected
+  `ITargetSelectionStrategy` and decided targets on the *monster's* behalf,
+  which is backwards (the monster is the one attacking) and inconsistent with
+  `AttackWeight`/`FleeWeight` already modeling monster behavior on the monster
+  side. `ITargetSelectionStrategy` now injects into `Monster` (constructor,
+  optional param defaulting to `RandomTargetStrategy` so the ~27 other
+  `Monster.Create` call sites that don't care about targeting don't need to
+  supply one); `Monster.ChooseTarget(availableTargets)` mirrors the existing
+  `AttemptFlee()` self-contained-decision shape. The real injection point is
+  `RandomEncounterGenerator`'s constructor, which passes its strategy to every
+  `Monster.Create` it calls. `Party`/`IParty` dropped `ChooseTarget` and the
+  strategy entirely — back to just roster/encounter-log bookkeeping.
+  `StandardBattleResolver` now computes the living-members list itself and
+  calls `monster.ChooseTarget(standing)`. Test fallout: `PartyTests`' two
+  `ChooseTarget` tests moved to a new `Combatants/MonsterTargetSelectionTests.cs`,
+  rewritten against `Monster` instead of `Party`; everything else was a
+  mechanical constructor-signature update. 37 tests still pass (2 moved, not
+  lost). `docs/domain-model.md`'s diagram and kernekrav-h rationale updated to
+  match — the old "party-side, belongs to formation" justification is called
+  out as having been a rationalization for parking the required strategy
+  somewhere, not a reflection of an actual formation mechanic (none exists).

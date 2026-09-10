@@ -1,4 +1,5 @@
 using Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants.Adventurers;
 using Dqh.Domain.Magic;
 
 namespace Dqh.Domain.Combatants.Monsters;
@@ -11,4 +12,7 @@ public interface IMonster : ICombatant
     int DefensePower { get; }
 
     bool IsWeakTo(ElementType element);
+
+    /// <returns>The targeted party member, or <c>null</c> if nobody is left standing.</returns>
+    Adventurer? ChooseTarget(IReadOnlyList<Adventurer> availableTargets);
 }

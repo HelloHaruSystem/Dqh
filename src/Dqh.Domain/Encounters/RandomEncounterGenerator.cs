@@ -1,4 +1,5 @@
 using Dqh.Domain.Combatants.Monsters;
+using Dqh.Domain.Strategies;
 
 namespace Dqh.Domain.Encounters;
 
@@ -10,11 +11,18 @@ public sealed class RandomEncounterGenerator : IEncounterGenerator
 
     private static readonly MonsterKind[] Pool = Enum.GetValues<MonsterKind>();
 
+    private readonly ITargetSelectionStrategy _targetSelectionStrategy;
+
+    public RandomEncounterGenerator(ITargetSelectionStrategy targetSelectionStrategy)
+    {
+        _targetSelectionStrategy = targetSelectionStrategy;
+    }
+
     public Encounter Generate()
     {
         var groupSize = Random.Shared.Next(MinGroupSize, MaxGroupSize + 1);
         var monsters = Enumerable.Range(0, groupSize)
-            .Select(_ => Monster.Create(Pool[Random.Shared.Next(Pool.Length)]));
+            .Select(_ => Monster.Create(Pool[Random.Shared.Next(Pool.Length)], _targetSelectionStrategy));
 
         return new Encounter(monsters);
     }
