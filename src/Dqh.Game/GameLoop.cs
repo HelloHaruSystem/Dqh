@@ -36,30 +36,50 @@ internal static class GameLoop
 
         // Movement is locked out for the duration of a map transition — the
         // fade itself is the only thing that should be happening on screen.
-        if (world.IsTransitioning) return;
+        if (world.Transition.IsActive) return;
 
         // Polled every tick regardless of state, so a confirm press can never
         // sit queued up and block later input — it's simply a no-op when
         // there's nothing to advance or interact with.
         var confirmPressed = input.TryGetConfirm();
 
-        if (world.IsTalking)
+        if (world.ActiveBattle is { } battle)
+        {
+            if (battle.IsFinished)
+            {
+                world.EndBattle(player);
+                return;
+            }
+
+            if (confirmPressed)
+            {
+                battle.HandleConfirm();
+            }
+            else if (input.TryGetMove(deltaSeconds, out _, out var battleRowDelta) && battleRowDelta != 0)
+            {
+                battle.HandleMove(battleRowDelta);
+            }
+
+            return;
+        }
+
+        if (world.Conversation.IsTalking)
         {
             // Only one of TryGetConfirm/TryGetMove reads fresh input per tick.
-            if (world.ActiveChoice is not null)
+            if (world.Conversation.ActiveChoice is not null)
             {
                 if (confirmPressed)
                 {
-                    world.CommitChoice();
+                    world.Conversation.CommitChoice();
                 }
                 else if (input.TryGetMove(deltaSeconds, out _, out var talkingRowDelta) && talkingRowDelta != 0)
                 {
-                    world.ToggleChoiceSelection();
+                    world.Conversation.ToggleChoiceSelection();
                 }
             }
             else if (confirmPressed)
             {
-                world.AdvanceDialogue();
+                world.Conversation.AdvanceDialogue();
             }
             else
             {
@@ -79,6 +99,7 @@ internal static class GameLoop
         {
             player.Move(columnDelta, rowDelta);
             world.CheckPortal(player);
+            world.CheckEncounter(player);
         }
     }
 }

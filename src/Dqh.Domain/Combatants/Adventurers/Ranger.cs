@@ -10,8 +10,9 @@ public sealed class Ranger : Adventurer, IAttacker, IFleeable
     private const int StartingMana = 15;
     private const int AttackDamage = 7;
     private const double FleeChance = 0.5;
+    private const int SpeedValue = 12;
 
-    public Ranger(string name) : base(name, MaxHitPointsValue, StartingMana)
+    public Ranger(string name) : base(name, MaxHitPointsValue, StartingMana, SpeedValue)
     {
     }
 

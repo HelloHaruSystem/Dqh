@@ -11,10 +11,11 @@ public sealed class Mage : Adventurer, IAttacker, ISpellcaster
     private const int MaxHitPointsValue = 22;
     private const int StartingMana = 60;
     private const int AttackDamage = 3;
+    private const int SpeedValue = 7;
 
     private readonly List<DamageSpell> _knownSpells;
 
-    public Mage(string name) : base(name, MaxHitPointsValue, StartingMana)
+    public Mage(string name) : base(name, MaxHitPointsValue, StartingMana, SpeedValue)
     {
         _knownSpells =
         [

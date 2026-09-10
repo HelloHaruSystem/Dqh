@@ -17,7 +17,7 @@ internal static class MonsterBestiary
             attackElement: ElementType.Physical,
             weaknesses: [ElementType.Fire],
             attackDescriptionTemplate: "{0} bumps clumsily into {1}",
-            attackWeight: 100, fleeWeight: 0),
+            attackWeight: 100, fleeWeight: 0, speed: 5),
 
         [MonsterKind.Dracky] = new MonsterDefinition(
             MonsterKind.Dracky, "Dracky",
@@ -25,7 +25,7 @@ internal static class MonsterBestiary
             attackElement: ElementType.Wind,
             weaknesses: [ElementType.Ice],
             attackDescriptionTemplate: "{0} swoops in and nips at {1}",
-            attackWeight: 100, fleeWeight: 0),
+            attackWeight: 100, fleeWeight: 0, speed: 9),
 
         [MonsterKind.Ghost] = new MonsterDefinition(
             MonsterKind.Ghost, "Ghost",
@@ -33,7 +33,7 @@ internal static class MonsterBestiary
             attackElement: ElementType.Ice,
             weaknesses: [ElementType.Wind],
             attackDescriptionTemplate: "{0} reaches through {1} with an icy touch",
-            attackWeight: 100, fleeWeight: 0),
+            attackWeight: 100, fleeWeight: 0, speed: 6),
 
         [MonsterKind.MetalSlime] = new MonsterDefinition(
             MonsterKind.MetalSlime, "Metal Slime",
@@ -41,7 +41,7 @@ internal static class MonsterBestiary
             attackElement: ElementType.Physical,
             weaknesses: [],
             attackDescriptionTemplate: "{0} weakly bonks {1}",
-            attackWeight: 10, fleeWeight: 90),
+            attackWeight: 10, fleeWeight: 90, speed: 15),
     };
 
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> has no bestiary entry.</exception>

@@ -8,6 +8,9 @@ public interface ICombatant
     int CurrentHitPoints { get; }
     bool IsDefeated { get; }
 
+    /// <summary>How early this combatant acts in a battle round — higher goes first.</summary>
+    int Speed { get; }
+
     /// <param name="amount">Non-negative damage to apply.</param>
     void TakeDamage(int amount);
 
