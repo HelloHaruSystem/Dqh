@@ -1,6 +1,6 @@
 # DQH
 
-A Dragon Quest–style RPG in C#/.NET.
+A simple RPG demo in C#/.NET.
 
 ## Dependencies
 
