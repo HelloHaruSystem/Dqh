@@ -32,8 +32,6 @@ internal sealed class PlayerMarker
     /// within bounds and walkable. Bumping into something still turns the
     /// player to face it, without animating a step.
     /// </summary>
-    /// <param name="columnDelta">-1, 0, or 1.</param>
-    /// <param name="rowDelta">-1, 0, or 1.</param>
     public void Move(int columnDelta, int rowDelta)
     {
         Facing = DirectionFor(columnDelta, rowDelta);

@@ -48,9 +48,13 @@ public sealed class StandardBattleResolver : IBattleResolver
                     fled.Add(monster);
                     log.Add($"{monster.Name} flees from battle!");
                 }
-                else if (party.ChooseTarget(monster) is { } target)
+                else
                 {
-                    log.Add(((IAttacker)monster).PerformAttack(target));
+                    var standing = party.Members.Where(a => !a.IsDefeated).ToList();
+                    if (monster.ChooseTarget(standing) is { } target)
+                    {
+                        log.Add(((IAttacker)monster).PerformAttack(target));
+                    }
                 }
             }
 

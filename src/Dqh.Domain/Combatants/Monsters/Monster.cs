@@ -1,6 +1,8 @@
 using Dqh.Domain.Abilities;
 using Dqh.Domain.Combatants;
+using Dqh.Domain.Combatants.Adventurers;
 using Dqh.Domain.Magic;
+using Dqh.Domain.Strategies;
 
 namespace Dqh.Domain.Combatants.Monsters;
 
@@ -12,16 +14,23 @@ public sealed class Monster : IMonster, IAttacker, IFleeable
 {
     private readonly HitPointTrack _hitPoints;
     private readonly MonsterDefinition _definition;
+    private readonly ITargetSelectionStrategy _targetSelectionStrategy;
 
-    private Monster(MonsterDefinition definition)
+    private Monster(MonsterDefinition definition, ITargetSelectionStrategy targetSelectionStrategy)
     {
         _definition = definition;
+        _targetSelectionStrategy = targetSelectionStrategy;
         _hitPoints = new HitPointTrack(definition.MaxHitPoints);
     }
 
     /// <param name="kind">Looked up in <see cref="MonsterBestiary"/>.</param>
+    /// <param name="targetSelectionStrategy">
+    /// Decides which living party member this monster attacks — defaults to
+    /// <see cref="RandomTargetStrategy"/> when the caller doesn't need a specific one.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="kind"/> has no bestiary entry.</exception>
-    public static Monster Create(MonsterKind kind) => new(MonsterBestiary.Get(kind));
+    public static Monster Create(MonsterKind kind, ITargetSelectionStrategy? targetSelectionStrategy = null) =>
+        new(MonsterBestiary.Get(kind), targetSelectionStrategy ?? new RandomTargetStrategy());
 
     public string Name => _definition.Name;
     public MonsterKind Kind => _definition.Kind;
@@ -51,4 +60,8 @@ public sealed class Monster : IMonster, IAttacker, IFleeable
         var roll = Random.Shared.Next(_definition.AttackWeight + _definition.FleeWeight);
         return roll < _definition.FleeWeight;
     }
+
+    /// <returns>The targeted party member, or <c>null</c> if nobody is left standing.</returns>
+    public Adventurer? ChooseTarget(IReadOnlyList<Adventurer> availableTargets) =>
+        availableTargets.Count == 0 ? null : _targetSelectionStrategy.SelectTarget(this, availableTargets);
 }
