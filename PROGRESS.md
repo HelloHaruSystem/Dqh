@@ -1,12 +1,14 @@
 # Progress log
 
 Running record of work across sessions, kept in the repo so any session can pick up
-context without relying on chat history. See [`docs/domain-model.md`](docs/domain-model.md)
-for the design; this file tracks *build status* against that design.
+context without relying on chat history. [`docs/domain-model.md`](docs/domain-model.md)
+holds only the Mermaid UML diagram (kept diagram-only on request, for easy viewing);
+this file tracks *build status* against that design, and carries the "Design
+rationale" write-up below (moved here from `domain-model.md` for the same reason).
 
-The UML lives as a Mermaid diagram embedded in `docs/domain-model.md`. Keep this
-discipline: refresh the diagram whenever the domain design changes, not just once
-at the end.
+Keep this discipline: refresh the diagram in `docs/domain-model.md`, and the
+matching rationale bullet below, whenever the domain design changes — not just
+once at the end.
 
 ## Kernekrav checklist (DQH names)
 
@@ -20,10 +22,115 @@ at the end.
 | f) callback on resolution | `Party.ResolveEncounter(Encounter, Action<Encounter>)` | **Done** |
 | g) UML before coding | `docs/domain-model.md` (Mermaid) | **Done** — matches current code |
 | h) dependency inversion via injected strategy | `ITargetSelectionStrategy` → `RandomEncounterGenerator` ctor, passed to `Monster` | **Done** |
-| i) documentation & git history | README, XML docs, incremental commits | In progress (README covers build/run; written justification for h) still missing) |
+| i) documentation & git history | README, XML docs, incremental commits, design rationale below | In progress (README covers build/run; h)'s justification is now written, below) |
 
-All of kernekrav a–h are now built. Remaining before hand-in: items/i)'s written
-justification, and whichever Day-2 alternative track gets picked (see below).
+All of kernekrav a–h are now built. Remaining before hand-in: whichever Day-2
+alternative track gets picked (see below).
+
+## Design rationale
+
+Moved here from `docs/domain-model.md`, which now holds only the Mermaid
+diagram — this is the "why it's shaped this way" write-up kernekrav i asks
+for, including h)'s justification.
+
+**Reskin:** the brief's superhero dispatch case, renamed — `Hero`→`Adventurer`,
+`Incident`→`Encounter`, `DispatchCenter`→`Party`.
+
+- **`ICombatant` interface, no shared base class.** `Adventurer` and `Monster` only
+  share HP bookkeeping (composed via `HitPointTrack`, not inherited) — everything
+  else diverges. Shared *capability*, not shared *taxonomy*: a Duck and an Airplane
+  both `CanFly` without a common `Flyer` base.
+- **Monsters are one data-driven class, not a subclass per monster.**
+  `MonsterKind` → `MonsterDefinition` → `MonsterBestiary` → single `Monster` class.
+  Same pattern for spells (`ISpell` + `DamageSpell`/`HealingSpell`, no abstract
+  `Spell` base) via `SpellId` → `SpellBook`.
+- **Every adventurer can attack; some also have a special ability.** `IAttacker` is
+  on all five concrete types (everyone can throw a basic hit), while
+  `ISpellcaster`/`IHealer`/`IDefender`/`IFleeable` are each exclusive to one —
+  matching a DQ battle menu (Attack is always available; Spell/Defend/Run aren't
+  universal here). `IAttacker` and `IFleeable` are also implemented by the
+  unrelated `Monster` class — ability, not position in a type tree.
+- **A monster's attack-vs-flee choice is weighted data, not a strategy class.**
+  `MonsterDefinition.AttackWeight`/`FleeWeight` drive `Monster.AttemptFlee()`'s
+  roll — regular monsters always attack (100/0); `MetalSlime` mostly flees
+  (10/90), matching its real reputation. This is how the original games actually
+  stored monster behavior (a per-species weight table), not object polymorphism.
+- **The injected strategy lives on the attacker, not the target.** Which living
+  party member a monster's attack lands on is the monster's decision to make —
+  the same category of choice as `AttemptFlee()`'s attack/flee weights, just
+  swappable instead of data-driven, since a real second implementation
+  (front-biased, lowest-HP, ...) is worth having here. `Monster` takes an
+  `ITargetSelectionStrategy` at construction (dependency inversion, kernekrav h)
+  and exposes `ChooseTarget(availableTargets)`; `RandomEncounterGenerator` is
+  where it's actually injected (constructor param, passed to every `Monster.Create`
+  it calls), first implementation `RandomTargetStrategy`. This replaced an
+  earlier version where `Party` held the strategy and answered
+  `ChooseTarget(attacker)` on the monster's behalf — technically working, but
+  backwards: `Party` doesn't decide who a monster attacks, the monster does, and
+  the "party formation" framing that justified it wasn't an actual mechanic in
+  the game, just a rationalization for parking kernekrav h's required strategy
+  somewhere. Also fixes a precedent inconsistency: monster behavior everywhere
+  else (`AttackWeight`/`FleeWeight`) already lives on the monster side, not the
+  thing it acts on.
+- **Speed decides turn order; Guard actually reduces damage.** Neither existed
+  until the battle loop needed them — a fixed party-then-monster order and a
+  flavor-only `Guard()` would've been the cheaper Domain change, but an
+  authentic DQ round interleaves fast and slow actors, and Defend is supposed
+  to matter. `ICombatant.Speed` sorts a round's actors descending (Ranger and
+  MetalSlime fastest, matching their DQ reputations); `Adventurer.IsGuarding`
+  (set by `Warrior.Guard()`, cleared by `ResetGuard()` at the start of the next
+  round) halves the next hit inside `Adventurer.TakeDamage` itself — no caller
+  needs to know guarding exists to still benefit from it.
+- **`IBattleResolver`/`StandardBattleResolver`: orchestration over old parts,
+  not new mechanics.** `ResolveRound` merges a round's `BattleCommand`s (one
+  per living party member) with every living monster into one Speed-ordered
+  list and executes each turn by dispatching to the exact ability interface a
+  `BattleCommand` needs (`AttackCommand`→`IAttacker`, `CastCommand`→
+  `ISpellcaster`, ...) — every action still returns the same flavor-text
+  string `PerformAttack`/`Cast`/`Heal`/`Guard` always did, just collected into
+  `BattleRoundResult.Log` instead of handed back one call at a time. A
+  monster's own turn still rolls `AttemptFlee()` against
+  `AttackWeight`/`FleeWeight` and, if it doesn't flee, still calls
+  `Monster.ChooseTarget` then `PerformAttack` — nothing about *how* a monster
+  decides to act changed, only that something now actually calls it every
+  round. A fled monster is reported in `BattleRoundResult.FledMonsters`
+  rather than removed by the resolver itself, keeping it a stateless,
+  swappable service — the caller owns the encounter's active roster.
+- **`IEncounterGenerator` mirrors `ITargetSelectionStrategy`'s shape.**
+  Another small injected-strategy interface (kernekrav h already has its one
+  required example in `ITargetSelectionStrategy`; this is additive
+  consistency, not a second requirement) — `RandomEncounterGenerator` builds
+  a group of 1-3 monsters from the whole bestiary via the existing
+  `Monster.Create`, swappable for a different generation policy later without
+  touching whatever calls it. It's also now `ITargetSelectionStrategy`'s actual
+  injection point (see above) — it holds the strategy and hands it to every
+  `Monster` it creates, so every monster from a given generator shares one
+  targeting policy without `Monster.Create`'s other 27 call sites (mostly
+  tests with no interest in targeting) needing to supply one; the factory
+  falls back to `RandomTargetStrategy` when none is given.
+- **Exceptions are for caller mistakes, not expected game states.** A party wipe,
+  running low on mana, or a defeated adventurer trying to act are normal outcomes
+  of play — `ChooseTarget` returns `null`, `Cast`/`Heal` return a message, instead
+  of throwing. `UnknownSpellException` (casting a spell you don't know) and
+  `AdventurerAlreadyRegisteredException` (registering the same adventurer twice)
+  only happen from an actual bug in the calling code, which is what an exception
+  should mean.
+- **Aggregation vs. composition, applied literally.** Catalogs (`MonsterBestiary`,
+  `SpellBook`) *compose* their entries — they own them. `Monster`/`Mage`/`Priest`/
+  `Party`'s roster only *aggregate* — many share the same catalog entry, or exist
+  independently of the party. `Party`'s encounter log and each combatant's
+  `HitPointTrack` are genuinely composed (owned exclusively, die with their owner).
+- **`FullyRestore()` and `Members` exist for the Inn.** `Dqh.Game`'s innkeeper NPC
+  needs to heal HP and mana back to full for every registered adventurer — a real
+  DQ inn mechanic, not a domain-internal need. `FullyRestore()` delegates to the
+  existing `Heal`/`RestoreMana` (capped at max, no overflow risk from passing
+  `int.MaxValue`); `Members` is a read-only view added because the roster
+  previously only supported single-item predicate lookups, and "heal everyone"
+  needs to enumerate it.
+- **Access modifiers, restrictive by default.** Leaf classes `sealed`; internal
+  helpers (`HitPointTrack`, `MonsterBestiary`, `SpellBook`) `internal`; mutable
+  state is a public getter behind a `private` setter, changed only via validated
+  methods. Enums use explicit 1-based values so reordering can't renumber them.
 
 ## What's actually built (`src/Dqh.Domain`)
 
@@ -713,3 +820,10 @@ Two fixes from a user code-review pass, one at a time:
   match — the old "party-side, belongs to formation" justification is called
   out as having been a rationalization for parking the required strategy
   somewhere, not a reflection of an actual formation mechanic (none exists).
+
+Also, at the user's request: `docs/domain-model.md` was trimmed to hold only
+the Mermaid diagram (it had grown to ~35 classes, "huge" to read alongside the
+prose). The "Reskin" note and the whole "Why it's shaped this way" rationale
+section — including kernekrav h's justification — moved into this file as the
+new "Design rationale" section above, rather than being deleted; `CLAUDE.md`
+already names both files as the right home for this kind of write-up.
