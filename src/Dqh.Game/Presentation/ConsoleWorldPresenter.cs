@@ -86,6 +86,7 @@ internal sealed class ConsoleWorldPresenter : IWorldPresenter
         }
         else if (battle.IsShowingMenu)
         {
+            Console.WriteLine($"{battle.CurrentActor?.Name}'s turn");
             for (var i = 0; i < battle.MenuOptions.Count; i++)
             {
                 Console.WriteLine($"{(i == battle.SelectedMenuIndex ? "> " : "  ")}{battle.MenuOptions[i]}");

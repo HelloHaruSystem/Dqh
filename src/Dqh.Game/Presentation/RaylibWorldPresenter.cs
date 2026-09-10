@@ -92,7 +92,7 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         }
         else if (battle.IsShowingMenu)
         {
-            DrawBattleMenu(battle.MenuOptions, battle.SelectedMenuIndex, screenWidth, screenHeight);
+            DrawBattleMenu(battle.CurrentActor?.Name, battle.MenuOptions, battle.SelectedMenuIndex, screenWidth, screenHeight);
         }
     }
 
@@ -134,12 +134,19 @@ internal sealed class RaylibWorldPresenter : IWorldPresenter
         }
     }
 
-    private static void DrawBattleMenu(IReadOnlyList<string> options, int selectedIndex, int screenWidth, int screenHeight)
+    private static void DrawBattleMenu(string? actorName, IReadOnlyList<string> options, int selectedIndex, int screenWidth, int screenHeight)
     {
         var margin = UiSettings.DialogueBoxMarginPixels;
         var boxHeight = screenHeight / UiSettings.DialogueBoxHeightDivisor;
         var boxY = screenHeight - boxHeight - margin;
         var lineHeight = UiSettings.DialogueLineFontSize + margin / 2;
+
+        if (actorName is not null)
+        {
+            var label = $"{actorName}'s turn";
+            var labelHeight = UiSettings.DialogueLineFontSize;
+            Raylib.DrawText(label, margin * 2, boxY - labelHeight - margin / 2, UiSettings.DialogueLineFontSize, Palette.DialogueLineText);
+        }
 
         Raylib.DrawRectangle(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBackground);
         Raylib.DrawRectangleLines(margin, boxY, screenWidth - margin * 2, boxHeight, Palette.DialogueBoxBorder);

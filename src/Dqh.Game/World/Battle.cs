@@ -26,6 +26,7 @@ internal sealed class Battle
 
     private BattleMenu? _menu;
     private Action<int>? _onMenuSelect;
+    private Adventurer? _currentActor;
 
     public Outcome Result { get; private set; } = Outcome.None;
 
@@ -38,6 +39,9 @@ internal sealed class Battle
     public bool IsShowingMenu => _menu is not null;
     public IReadOnlyList<string> MenuOptions => _menu?.Options ?? [];
     public int SelectedMenuIndex => _menu?.SelectedIndex ?? 0;
+
+    /// <summary>The party member currently choosing a command, for as long as any menu (main, spell, or target) is up for them.</summary>
+    public Adventurer? CurrentActor => _currentActor;
 
     /// <summary>The battle is done — its outcome is decided and the log has finished paging.</summary>
     public bool IsFinished => Result != Outcome.None && !_log.IsTalking;
@@ -92,6 +96,8 @@ internal sealed class Battle
 
     private void ShowMainMenu(Adventurer actor)
     {
+        _currentActor = actor;
+
         var options = new List<string> { "Attack" };
         if (actor is ISpellcaster) options.Add("Spell");
         if (actor is IHealer) options.Add("Heal");
@@ -168,6 +174,7 @@ internal sealed class Battle
 
     private void ResolveRound()
     {
+        _currentActor = null;
         var result = _resolver.ResolveRound(_party, _activeMonsters, _roundCommands);
         _roundCommands.Clear();
         _activeMonsters.RemoveAll(m => result.FledMonsters.Contains(m));
